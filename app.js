@@ -8,6 +8,10 @@ const os = require('os');
 const crypto = require('crypto');
 const WebSocket = require('ws');
 
+// Gemeldete Home-Assistant-Version. Clients pruefen sie teils gegen eine
+// Mindestversion, deshalb zentral und aktuell gehalten.
+const HA_VERSION = '2025.12.0';
+
 const DEFAULT_PORT = 7575;
 
 const LOG_BUFFER_SIZE = 200;
@@ -448,7 +452,32 @@ class ShellyWallDisplayApp extends Homey.App {
       return this._handleSSE(req, res);
     }
 
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
+    // Home-Assistant-Clients holen /manifest.json bei der Identitaetspruefung.
+    // Ohne diesen Zweig landet der Pfad im statischen Handler und wird zu 404 —
+    // im dashboard-Ordner liegt nur manifest.webmanifest.
+    if (url.pathname === '/manifest.json') {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        background_color: '#FFFFFF',
+        theme_color: '#03A9F4',
+        dir: 'ltr',
+        lang: 'en-US',
+        display: 'standalone',
+        name: 'Home Assistant',
+        short_name: 'Assistant',
+        start_url: '/',
+        description: 'Home Assistant',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+        ],
+      }));
+      return;
+    }
+
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
       return this._handleAPI(req, res, url);
     }
 
@@ -469,18 +498,7 @@ class ShellyWallDisplayApp extends Homey.App {
 
     if (url.pathname === '/api/config') {
       res.writeHead(200);
-      res.end(JSON.stringify({
-        components: [],
-        config_dir: '/config',
-        elevation: 0,
-        latitude: 0,
-        longitude: 0,
-        location_name: 'Homey',
-        time_zone: 'Europe/Amsterdam',
-        unit_system: { length: 'km', mass: 'g', temperature: 'Â°C', volume: 'L' },
-        version: '2024.1.0',
-        state: 'RUNNING',
-      }));
+      res.end(JSON.stringify(this._haConfig()));
       return;
     }
 
@@ -493,7 +511,7 @@ class ShellyWallDisplayApp extends Homey.App {
         installation_type: 'Home Assistant OS',
         requires_api_password: false,
         uuid: 'homey-shelly-wall-display',
-        version: '2024.1.0',
+        version: HA_VERSION,
         location_name: 'Homey',
       }));
       return;
@@ -552,7 +570,32 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     if (url.pathname === '/auth/authorize') {
-      // Redirect direkt zum Dashboard
+      // Die Home-Assistant-App faehrt den OAuth2-Ablauf mit Autorisierungscode:
+      //   /auth/authorize?response_type=code
+      //                  &client_id=https://home-assistant.io/android
+      //                  &redirect_uri=homeassistant://auth-callback
+      // Erwartet wird eine Weiterleitung auf die redirect_uri mit ?code=...
+      // Echtes Home Assistant zeigt davor eine Anmeldeseite; hier wird ohnehin
+      // jede Anmeldung akzeptiert, also geht es direkt zurueck.
+      const redirectUri  = url.searchParams.get('redirect_uri');
+      const state        = url.searchParams.get('state');
+      const responseType = url.searchParams.get('response_type');
+
+      if (redirectUri && responseType === 'code' && this._isAllowedRedirect(redirectUri)) {
+        const code = crypto.randomBytes(16).toString('hex');
+        let location = redirectUri
+          + (redirectUri.indexOf('?') === -1 ? '?' : '&')
+          + 'code=' + encodeURIComponent(code);
+        if (state !== null) location += '&state=' + encodeURIComponent(state);
+        this.log(`Auth-Code ausgestellt, Weiterleitung nach ${redirectUri}`);
+        res.setHeader('Location', location);
+        res.writeHead(302);
+        res.end();
+        return;
+      }
+
+      // Ohne OAuth-Parameter wie bisher aufs Dashboard — aeltere Displays
+      // rufen diesen Pfad ohne Parameter auf.
       res.setHeader('Location', '/');
       res.writeHead(302);
       res.end();
@@ -1984,6 +2027,8 @@ class ShellyWallDisplayApp extends Homey.App {
       '.png': 'image/png',
       '.svg': 'image/svg+xml',
       '.ico': 'image/x-icon',
+      '.json': 'application/json; charset=utf-8',
+      '.webmanifest': 'application/manifest+json',
     };
 
     // #6 Cache-Control nach Dateityp:
@@ -2070,11 +2115,55 @@ class ShellyWallDisplayApp extends Homey.App {
 
   // â”€â”€ HA WebSocket-Protokoll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Shelly Wall Display prÃ¼ft /api/websocket mit dem HA Auth-Handshake
+  // Eine Quelle fuer HTTP /api/config und den WebSocket-Befehl get_config.
+  // components darf nicht leer bleiben: ein echtes Home Assistant meldet dort
+  // die geladenen Komponenten, und ein leeres Feld faellt bei einer strengen
+  // Pruefung auf.
+  // Begrenzt die Weiterleitung auf das, was ein Display-Client wirklich
+  // braucht: das eigene App-Schema und Adressen auf diesem Server. Ohne diese
+  // Pruefung waere /auth/authorize eine offene Weiterleitung.
+  _isAllowedRedirect(uri) {
+    if (typeof uri !== 'string' || uri.length > 500) return false;
+    // Eigene App-Schemata der Home-Assistant-Clients
+    if (/^homeassistant:\/\//i.test(uri)) return true;
+    if (/^ha:\/\//i.test(uri)) return true;
+    // Relative Pfade auf diesem Server
+    if (uri.charAt(0) === '/' && uri.charAt(1) !== '/') return true;
+    return false;
+  }
+
+  _haConfig() {
+    const port = this.homey.settings.get('port') || DEFAULT_PORT;
+    const host = this._getLanIP() || 'homey.local';
+    return {
+      components: ['api', 'auth', 'config', 'frontend', 'history', 'http',
+                   'lovelace', 'person', 'system_log', 'websocket_api'],
+      config_dir: '/config',
+      elevation: 0,
+      latitude: 0,
+      longitude: 0,
+      location_name: 'Homey',
+      time_zone: 'Europe/Amsterdam',
+      unit_system: { length: 'km', mass: 'g', temperature: '°C', volume: 'L', pressure: 'Pa', wind_speed: 'm/s', accumulated_precipitation: 'mm' },
+      currency: 'EUR',
+      country: 'CH',
+      language: 'en',
+      config_source: 'storage',
+      safe_mode: false,
+      recovery_mode: false,
+      state: 'RUNNING',
+      external_url: null,
+      internal_url: `http://${host}:${port}`,
+      allowlist_external_dirs: [],
+      allowlist_external_urls: [],
+      version: HA_VERSION,
+    };
+  }
+
   _handleWebSocket(ws, req) {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     this.log(`WS connect: ${pathname}`);
 
-    const HA_VERSION = '2024.1.0';
 
     // Schritt 1: auth_required senden
     ws.send(JSON.stringify({ type: 'auth_required', ha_version: HA_VERSION }));
@@ -2100,6 +2189,26 @@ class ShellyWallDisplayApp extends Homey.App {
       }
 
       // Alle anderen Commands â†’ generisches OK
+      // Home-Assistant-Clients rufen direkt nach auth_ok get_config und
+      // get_states auf und arbeiten mit dem Ergebnis weiter. Ein result:null
+      // laesst einen Client, der ein Objekt oder eine Liste erwartet, auflaufen.
+      if (msg.type === 'ping') {
+        ws.send(JSON.stringify({ id: msg.id, type: 'pong' }));
+        return;
+      }
+      if (msg.type === 'get_config') {
+        ws.send(JSON.stringify({ id: msg.id, type: 'result', success: true, result: this._haConfig() }));
+        return;
+      }
+      if (msg.type === 'get_states') {
+        ws.send(JSON.stringify({ id: msg.id, type: 'result', success: true, result: [] }));
+        return;
+      }
+      if (msg.type === 'get_services' || msg.type === 'get_panels') {
+        ws.send(JSON.stringify({ id: msg.id, type: 'result', success: true, result: {} }));
+        return;
+      }
+
       if (msg.id) {
         ws.send(JSON.stringify({ id: msg.id, type: 'result', success: true, result: null }));
       }
