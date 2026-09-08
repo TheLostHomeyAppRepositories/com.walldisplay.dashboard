@@ -481,6 +481,25 @@ class ShellyWallDisplayApp extends Homey.App {
       return this._handleAPI(req, res, url);
     }
 
+    // Ein echtes Home Assistant beantwortet seine Panel-Routen (/lovelace, /config,
+    // /history …) mit derselben Seite wie /. Clients springen nach der Anmeldung
+    // direkt dorthin; ohne diesen Zweig landen sie im 404 des statischen Handlers.
+    if (ShellyWallDisplayApp.PANEL_PATHS.has(url.pathname)) {
+      return this._serveStatic(res, '/index.html', req);
+    }
+
+    // Unterpfade wie /lovelace/0 bekommen eine Weiterleitung statt der Seite:
+    // index.html verweist relativ auf style.css und client.js, unter /lovelace/0
+    // fragt der Browser also /lovelace/client.js an. Das waere HTML, und unter
+    // X-Content-Type-Options: nosniff fuehrt er es nicht aus — die Seite bliebe
+    // leer. Darum sind in PANEL_PATHS auch nur einstufige Pfade erlaubt.
+    if (url.pathname.startsWith('/lovelace/')) {
+      res.setHeader('Location', '/');
+      res.writeHead(302);
+      res.end();
+      return;
+    }
+
     return this._serveStatic(res, url.pathname, req);
   }
 
@@ -530,25 +549,30 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     if (url.pathname === '/auth/login_flow' && req.method === 'POST') {
-      const flowId = Math.random().toString(36).substring(2);
+      // Felder und Reihenfolge am echten Home Assistant gemessen —
+      // description_placeholders, last_step und preview fehlten bisher.
+      const flowId = crypto.randomBytes(16).toString('hex');
       res.writeHead(200);
       res.end(JSON.stringify({
         type: 'form',
         flow_id: flowId,
         handler: ['homeassistant', null],
-        step_id: 'init',
         data_schema: [
-          { name: 'username', type: 'string' },
-          { name: 'password', type: 'string', required: true },
+          { type: 'string', name: 'username', required: true },
+          { type: 'string', name: 'password', required: true },
         ],
         errors: {},
+        description_placeholders: null,
+        last_step: null,
+        preview: null,
+        step_id: 'init',
       }));
       return;
     }
 
     if (url.pathname.match(/^\/auth\/login_flow\/[^/]+$/) && req.method === 'POST') {
       // Schritt 2: Credentials akzeptieren, Code zurÃ¼ckgeben
-      const code = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+      const code = crypto.randomBytes(16).toString('hex');
       res.writeHead(200);
       res.end(JSON.stringify({
         type: 'create_entry',
@@ -574,23 +598,31 @@ class ShellyWallDisplayApp extends Homey.App {
       //   /auth/authorize?response_type=code
       //                  &client_id=https://home-assistant.io/android
       //                  &redirect_uri=homeassistant://auth-callback
-      // Erwartet wird eine Weiterleitung auf die redirect_uri mit ?code=...
-      // Echtes Home Assistant zeigt davor eine Anmeldeseite; hier wird ohnehin
-      // jede Anmeldung akzeptiert, also geht es direkt zurueck.
+      // Erwartet wird ein Sprung auf die redirect_uri mit ?code=...
+      //
+      // Gemessen an einem echten Home Assistant: dort kommt hier 200 text/html mit
+      // <ha-authorize>, und der Sprung auf die redirect_uri passiert erst im
+      // Browser. Eine 302-Antwort, wie sie 1.3.70 schickte, gibt es dort nie.
+      // Vermutung, warum das den Unterschied macht: das Display ist ein
+      // Android-WebView, und der faengt eine server-seitige Weiterleitung auf ein
+      // fremdes URL-Schema nicht ab. Nachgemessen ist das nicht — sicher ist nur,
+      // dass die Seite der Form des Originals entspricht und die Weiterleitung nicht.
+      // Angemeldet wird hier ohnehin niemand, die Seite fuehrt also direkt weiter.
       const redirectUri  = url.searchParams.get('redirect_uri');
       const state        = url.searchParams.get('state');
       const responseType = url.searchParams.get('response_type');
 
       if (redirectUri && responseType === 'code' && this._isAllowedRedirect(redirectUri)) {
         const code = crypto.randomBytes(16).toString('hex');
-        let location = redirectUri
+        let target = redirectUri
           + (redirectUri.indexOf('?') === -1 ? '?' : '&')
           + 'code=' + encodeURIComponent(code);
-        if (state !== null) location += '&state=' + encodeURIComponent(state);
-        this.log(`Auth-Code ausgestellt, Weiterleitung nach ${redirectUri}`);
-        res.setHeader('Location', location);
-        res.writeHead(302);
-        res.end();
+        if (state !== null) target += '&state=' + encodeURIComponent(state);
+        this.log(`Auth-Code ausgestellt, Anmeldeseite leitet nach ${redirectUri}`);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.writeHead(200);
+        res.end(this._authorizePage(target));
         return;
       }
 
@@ -2119,17 +2151,63 @@ class ShellyWallDisplayApp extends Homey.App {
   // components darf nicht leer bleiben: ein echtes Home Assistant meldet dort
   // die geladenen Komponenten, und ein leeres Feld faellt bei einer strengen
   // Pruefung auf.
+  // Maskiert Text fuer ein HTML-Attribut. redirect_uri ist auf bekannte Schemata
+  // begrenzt, Pfad und Query darin sind aber frei waehlbar.
+  _escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Die Anmeldeseite fuer /auth/authorize. Bewusst ES5 und ohne externe Dateien:
+  // Zielbrowser ist der WebView des Wall Displays (Chrome 55).
+  // Der Sprung erfolgt aus dem Skript. Der meta-refresh steht in <noscript>, damit
+  // er nur greift, wenn kein JavaScript laeuft — sonst wuerde er dieselbe
+  // ?code=-Adresse ein zweites Mal zustellen, falls die Seite nach dem Sprung
+  // stehen bleibt. Der sichtbare Link bleibt als letzter Rueckfall.
+  _authorizePage(target) {
+    const js   = JSON.stringify(target).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+    const attr = this._escapeHtml(target);
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+      + '<title>Home Assistant</title>'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<noscript><meta http-equiv="refresh" content="0;url=' + attr + '"></noscript>'
+      + '<style>body{font-family:Roboto,Noto,sans-serif;margin:0;display:flex;'
+      + 'align-items:center;justify-content:center;height:100vh;'
+      + 'background:#fafafa;color:#212121}'
+      + '@media (prefers-color-scheme:dark){body{background:#111;color:#e1e1e1}}'
+      + 'a{color:#03a9f4}</style></head><body><div style="text-align:center">'
+      + '<p>Home Assistant</p><p><a id="continue" href="' + attr + '">Continue</a></p>'
+      + '</div><script>(function(){var z=' + js + ';try{window.location.replace(z);}'
+      + 'catch(e){try{window.location.href=z;}catch(e2){}}})();<\/script>'
+      + '</body></html>';
+  }
+
   // Begrenzt die Weiterleitung auf das, was ein Display-Client wirklich
   // braucht: das eigene App-Schema und Adressen auf diesem Server. Ohne diese
   // Pruefung waere /auth/authorize eine offene Weiterleitung.
   _isAllowedRedirect(uri) {
-    if (typeof uri !== 'string' || uri.length > 500) return false;
+    if (typeof uri !== 'string' || uri.length === 0 || uri.length > 500) return false;
+    // Steuer- und Leerzeichen sowie Zeichen, die in HTML Struktur bilden, werden
+    // verworfen. Browser entfernen Tab und Zeilenumbruch beim Auflösen, ein Ziel
+    // sieht danach also anders aus als bei der Prüfung.
+    if (/[\u0000-\u0020\u007f<>"'\\]/.test(uri)) return false;
     // Eigene App-Schemata der Home-Assistant-Clients
     if (/^homeassistant:\/\//i.test(uri)) return true;
     if (/^ha:\/\//i.test(uri)) return true;
-    // Relative Pfade auf diesem Server
-    if (uri.charAt(0) === '/' && uri.charAt(1) !== '/') return true;
-    return false;
+    // Relative Pfade: gegen eine feste Herkunft auflösen und prüfen, dass sie
+    // dort auch landen. Eine Präfixprüfung allein genügt nicht — der Browser
+    // behandelt den Backslash wie einen Schrägstrich, "/\\fremd.example/x" führt
+    // also nach draussen, obwohl das zweite Zeichen kein Schrägstrich ist.
+    if (uri.charAt(0) !== '/') return false;
+    try {
+      return new URL(uri, 'http://homey.invalid').origin === 'http://homey.invalid';
+    } catch (_) {
+      return false;
+    }
   }
 
   _haConfig() {
@@ -2601,6 +2679,13 @@ class ShellyWallDisplayApp extends Homey.App {
 }
 
 // High-frequency polling paths that should not appear in the debug log buffer
+// Frontend-Routen, die ein echtes Home Assistant mit der Dashboard-Seite beantwortet
+ShellyWallDisplayApp.PANEL_PATHS = new Set([
+  '/lovelace', '/config', '/history', '/logbook', '/profile',
+  '/map', '/energy', '/todo', '/calendar', '/media-browser',
+  '/developer-tools',
+]);
+
 ShellyWallDisplayApp.SILENT_PATHS = new Set([
   '/api/devices', '/api/energy', '/api/zones', '/api/flows',
   '/api/settings', '/api/client-ip', '/ping', '/api/moods',
