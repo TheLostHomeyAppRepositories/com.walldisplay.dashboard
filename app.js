@@ -456,23 +456,37 @@ class ShellyWallDisplayApp extends Homey.App {
     // Ohne diesen Zweig landet der Pfad im statischen Handler und wird zu 404 —
     // im dashboard-Ordner liegt nur manifest.webmanifest.
     if (url.pathname === '/manifest.json') {
+      // Feld fuer Feld an einem echten Home Assistant abgeglichen. Der Melder-Log
+      // zeigt, dass die Android-App nach dem Anmeldesprung genau diesen Pfad
+      // nativ abruft (UA Dalvik/2.1.0) und danach abbricht — das ist ihre
+      // "Home Assistant verification". Entscheidend ist vermutlich
+      // related_applications: dort findet die App ihre eigene Paket-ID wieder.
+      // Nur die Icon-Pfade bleiben unsere, weil /static/icons/… hier nicht liegt.
+      // Das Dashboard verlinkt manifest.webmanifest, ist davon also nicht betroffen.
       res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.writeHead(200);
       res.end(JSON.stringify({
         background_color: '#FFFFFF',
-        theme_color: '#03A9F4',
+        description: 'Home automation platform that puts local control and privacy first.',
         dir: 'ltr',
-        lang: 'en-US',
         display: 'standalone',
-        name: 'Home Assistant',
-        short_name: 'Assistant',
-        start_url: '/',
-        description: 'Home Assistant',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { purpose: 'any', sizes: '192x192', src: '/icon-192.png', type: 'image/png' },
+          { purpose: 'any', sizes: '512x512', src: '/icon-512.png', type: 'image/png' },
+          { purpose: 'maskable', sizes: '192x192', src: '/icon-192.png', type: 'image/png' },
+          { purpose: 'maskable', sizes: '512x512', src: '/icon-512.png', type: 'image/png' },
         ],
+        id: '/?homescreen=1',
+        lang: 'en-US',
+        name: 'Home Assistant',
+        prefer_related_applications: true,
+        related_applications: [
+          { id: 'io.homeassistant.companion.android', platform: 'play' },
+        ],
+        short_name: 'Home Assistant',
+        start_url: '/?homescreen=1',
+        theme_color: '#2980b9',
       }));
       return;
     }
