@@ -476,6 +476,48 @@ body.room-chips-visible .main {
   gap: 10px;
 }
 
+/* Kachelhöhe "Passend": feste Höhe statt Mindesthöhe, sonst bläht der Inhalt
+   die Kachel wieder auf und das Rechnen war umsonst. */
+body.fit-tiles .device-card {
+  height: var(--tile-h);
+  min-height: 0;
+}
+
+/* Aufteilung 2 x 2: die Spaltenzahl wird hier fest vorgegeben statt aus der
+   Kachelbreite abgeleitet — genau das ist der Zweck dieser Einstellung. */
+body.fit-2x2 .device-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Wird die Höhe knapp, reicht der Platz nicht mehr für alles. Dann weichen
+   zuerst die Nebenangaben (Messwerte, Status) — der Name bleibt, denn eine
+   Kachel ohne Namen ist unbrauchbar. Ohne diese Stufe schneidet
+   overflow:hidden von unten ab, und das Erste, was verschwindet, ist
+   ausgerechnet der Name. Die Schwelle setzt _fitTiles(). */
+/* Bewusst an .fit-tiles gebunden: bliebe .fit-compact beim Moduswechsel
+   einmal haengen, waere sie so wirkungslos statt stillschweigend schaedlich. */
+body.fit-tiles.fit-compact .device-card {
+  padding: 8px 10px 6px;
+  gap: 4px;
+}
+body.fit-tiles.fit-compact .device-values,
+body.fit-tiles.fit-compact .device-status {
+  display: none;
+}
+body.fit-tiles.fit-compact .device-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.fit-tiles.fit-compact .device-icon,
+body.fit-tiles.fit-compact .device-icon-img {
+  width: 28px;
+  height: 28px;
+}
+body.fit-tiles.fit-compact .device-icon {
+  font-size: 26px;
+}
+
 /* ── Device card ──────────────────────────────── */
 .device-card {
   background: var(--surface);

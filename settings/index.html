@@ -370,6 +370,11 @@
       display: flex; gap: 0; margin-top: 8px;
       border: 1.5px solid #ddd; border-radius: 8px; overflow: hidden;
     }
+    /* Vier Beschriftungen in einer Reihe: weniger Innenabstand, kleinere
+       Schrift, und Umbruch innerhalb des Knopfes erlaubt. */
+    .seg-btn-group-4 .seg-btn {
+      padding: 8px 6px; font-size: 12px; line-height: 1.25;
+    }
     .seg-btn {
       flex: 1; background: #fff; border: none;
       border-right: 1px solid #ddd; padding: 9px 12px;
@@ -1033,11 +1038,13 @@
     <!-- Tile Height -->
     <div class="card collapsible" data-collapse-key="designTileHeight">
       <div class="card-title" data-i18n="tileHeightTitle">Tile Height</div>
-      <div class="seg-btn-group" id="tile-height-group">
+      <div class="seg-btn-group seg-btn-group-4" id="tile-height-group">
         <button class="seg-btn active" data-value="auto"   onclick="setTileHeight('auto')"   data-i18n="tileHeightAuto">Auto</button>
         <button class="seg-btn"        data-value="square" onclick="setTileHeight('square')" data-i18n="tileHeightSquare">Same as width</button>
+        <button class="seg-btn"        data-value="fit"    onclick="setTileHeight('fit')"    data-i18n="tileHeightFit">Fit to screen</button>
+        <button class="seg-btn"        data-value="fit2x2" onclick="setTileHeight('fit2x2')" data-i18n="tileHeightSquareFit">2 &times; 2</button>
       </div>
-      <p class="hint" data-i18n="tileHeightHint">Auto: height follows content. Same as width: tiles are at least as tall as wide (square).</p>
+      <p class="hint" data-i18n="tileHeightHint">Auto: height follows content. Same as width: tiles are at least as tall as wide. Fit to screen: tile height shrinks until everything fits without scrolling; readings and status are dropped first and long names are shortened. With a lot of devices the tiles reach their minimum and the page scrolls again. 2 &times; 2: two columns, and the tile height set so two rows exactly fill the screen — four large tiles per screen, which suits a small wall display. Any further devices are below and reached by scrolling. This is the one mode that overrides the tile width.</p>
       <div class="status" id="tile-height-status"></div>
     </div>
 
@@ -1323,7 +1330,15 @@
         tileHeightTitle:  'Tile Height',
         tileHeightAuto:   'Auto',
         tileHeightSquare: 'Same as width',
-        tileHeightHint:   'Auto: height follows content. Same as width: tiles are at least as tall as wide.',
+        tileHeightFit:    'Fit to screen',
+        tileHeightSquareFit: '2 \u00d7 2',
+        tileHeightHint:   'Auto: height follows content. Same as width: tiles are at least as tall as wide. '
+                          + 'Fit to screen: tile height shrinks until everything fits without scrolling; readings and status '
+                          + 'are dropped first and long names are shortened. With a lot of devices the tiles reach their '
+                          + 'minimum and the page scrolls again. 2 \u00d7 2: '
+                          + 'two columns and a tile height that makes two rows exactly fill the screen — four large '
+                          + 'tiles per screen, which suits a small wall display. Further devices are below and reached '
+                          + 'by scrolling. This is the one mode that overrides the tile width.',
         tileHeightSaved:  'Height saved',
         energyTitle:      'Energy Dashboard',
         energyLabel:      'Show Energy button in header',
@@ -1576,7 +1591,16 @@
         tileHeightTitle:  'Kachelhöhe',
         tileHeightAuto:   'Auto',
         tileHeightSquare: 'Wie Breite',
-        tileHeightHint:   'Auto: Höhe passt sich dem Inhalt an. Wie Breite: Kacheln sind mindestens so hoch wie breit.',
+        tileHeightFit:    'Passend',
+        tileHeightSquareFit: '2 \u00d7 2',
+        tileHeightHint:   'Auto: Höhe passt sich dem Inhalt an. Wie Breite: Kacheln sind mindestens so hoch wie breit. '
+                          + 'Passend: die Kachelhöhe schrumpft, bis alles ohne Scrollen auf den Bildschirm passt; zuerst '
+                          + 'entfallen Messwerte und Status, lange Namen werden gekürzt. Bei sehr vielen Geräten erreichen '
+                          + 'die Kacheln ihre Mindesthöhe und die Seite scrollt wieder. 2 \u00d7 2: '
+                          + 'zwei Spalten und eine Kachelhöhe, bei der zwei Reihen den Bildschirm genau ausfüllen — '
+                          + 'vier grosse Kacheln pro Bildschirm, passend für ein kleines Wall Display. Weitere Geräte '
+                          + 'liegen darunter und werden durch Scrollen erreicht. Dies ist der einzige Modus, der die '
+                          + 'eingestellte Kachelbreite übergeht.',
         tileHeightSaved:  'Höhe gespeichert',
         energyTitle:      'Energy-Dashboard',
         energyLabel:      '⚡-Schaltfläche in der Kopfzeile anzeigen',

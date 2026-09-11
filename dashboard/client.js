@@ -1188,11 +1188,27 @@
           _weatherData = null;
         }
         // Kachelgrösse: 1=90px 2=110px 3=130px(default) 4=165px 5=210px
-        var tilePx = [90, 110, 130, 165, 210];
         var ts = (cfg.tileSize >= 1 && cfg.tileSize <= 5) ? cfg.tileSize : 3;
-        document.documentElement.style.setProperty('--tile-min', tilePx[ts - 1] + 'px');
-        // Kachelhöhe: 'square' = min-height gleich wie Breite, 'auto' = content-driven (100px min)
-        var tileH = cfg.tileHeight === 'square' ? tilePx[ts - 1] + 'px' : '100px';
+        document.documentElement.style.setProperty('--tile-min', _TILE_PX[ts - 1] + 'px');
+        // Kachelhöhe: 'square' = min-height gleich wie Breite,
+        //             'fit'    = nach dem Rendern so berechnet, dass alles auf
+        //                        den Bildschirm passt (siehe _fitTiles),
+        //             'auto'   = content-driven (100px min)
+        _tileMinPx = _TILE_PX[ts - 1];
+        // 'squarefit' ist der alte Schluessel der vierten Option und wird
+        // weitergefuehrt, damit eine bestehende Auswahl nicht still verfaellt.
+        _tileHeightMode =
+            cfg.tileHeight === 'square' ? 'square'
+          : cfg.tileHeight === 'fit' ? 'fit'
+          : (cfg.tileHeight === 'fit2x2' || cfg.tileHeight === 'squarefit') ? 'fit2x2'
+          : 'auto';
+        var berechnet = _isFitMode();
+        document.body.classList.toggle('fit-tiles', berechnet);
+        document.body.classList.toggle('fit-2x2', _tileHeightMode === 'fit2x2');
+        if (!berechnet) document.body.classList.remove('fit-compact');
+        // 'squarefit' startet auf der Mindestbreite; _fitTiles hebt danach auf
+        // die tatsaechlich gerenderte Breite an und waechst von dort weiter.
+        var tileH = _tileHeightMode === 'square' ? _tileMinPx + 'px' : '100px';
         document.documentElement.style.setProperty('--tile-h', tileH);
         // Flow-Filter merken — Server-Semantik beibehalten:
         //   null  = alle Flows zeigen
@@ -1987,6 +2003,12 @@
   }
 
   // ── Rendern ─────────────────────────────────────────
+  var _tileHeightMode = 'auto';
+  var _tileMinPx = 130;
+  // Die Stufen des Reglers "Kachelbreite" — auch die Leiter, die
+  // "Mind. wie Breite" hinabsteigt, wenn quadratisch sonst nicht passt.
+  var _TILE_PX = [90, 110, 130, 165, 210];
+
   function render() {
     updateViewToggle();
     var container = document.getElementById('zones-container');
@@ -2035,6 +2057,9 @@
     _reapplyFilters();
     // Buttons koennen sich ein-/ausblenden — Hoehe erneut abgleichen
     _syncHeaderHeight();
+    // Erst jetzt steht das Raster, also erst jetzt laesst sich die Kachelhoehe
+    // fuer "Passend" messen.
+    _scheduleFit();
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
@@ -2045,9 +2070,11 @@
   // Such-, Klassen- und Raumfilter schliessen sich gegenseitig aus —
   // es kann also hoechstens einer aktiv sein.
   function _reapplyFilters() {
-    if (_searchQuery) { _applySearchFilter(_searchQuery); return; }
-    if (_activeClassFilter) { _applyClassFilter(); return; }
+    if (_searchQuery) { _applySearchFilter(_searchQuery); _scheduleFit(); return; }
+    if (_activeClassFilter) { _applyClassFilter(); _scheduleFit(); return; }
     if (_activeRoomFilter) { _applyRoomFilter(); }
+    // Ein Filter aendert die Zahl sichtbarer Kacheln und damit die Zeilenzahl.
+    _scheduleFit();
   }
 
   function renderByZones(container) {
@@ -3030,6 +3057,112 @@
   // über --header-h nach ihrer Höhe. Bei vielen Schnellzugriffen bricht sie
   // auf schmalen Displays um und wird höher — dann muss die Variable folgen,
   // sonst verdeckt sie den Anfang der Geräteliste.
+  // ── Kachelhöhe "Passend" ──────────────────────────────────────────────
+  // Nicht geschätzt, sondern gemessen: wie viele Rasterzeilen wirklich da sind
+  // und wie weit der Inhalt unten übersteht. Daraus die Kachelhöhe ableiten
+  // und in wenigen Korrekturschritten nachziehen — jeder Schritt misst neu,
+  // damit Zonentitel, Flow-Kacheln und Umbrüche von selbst berücksichtigt sind.
+  // Untergrenze: darunter passt selbst in der knappen Stufe (Symbol 28 px +
+  // Name + Innenabstand) nichts Sinnvolles mehr hinein — gemessen, nicht geraten.
+  var _FIT_MIN = 64;
+  var _FIT_MAX = 240;
+  // Ab dieser Hoehe ist Platz fuer Messwerte und Status.
+  var _FIT_ROOMY = 130;
+  var _fitTimer = null;
+
+  // Zeilen über alle Raster hinweg. Ausgeblendete Kacheln (Filter) zählen nicht.
+  function _gridRows() {
+    var grids = document.querySelectorAll('.device-grid');
+    var zeilen = 0;
+    for (var i = 0; i < grids.length; i++) {
+      var g = grids[i];
+      var sichtbar = 0;
+      for (var k = 0; k < g.children.length; k++) {
+        if (g.children[k].style.display !== 'none') sichtbar++;
+      }
+      if (!sichtbar) continue;
+      var spalten = (window.getComputedStyle(g).gridTemplateColumns || '')
+        .split(' ').filter(function (x) { return x; }).length || 1;
+      zeilen += Math.ceil(sichtbar / spalten);
+    }
+    return zeilen;
+  }
+
+  // Wie weit steht der Inhalt über den Bildschirm hinaus? Positiv = zu hoch,
+  // negativ = Platz übrig. Unabhängig von der aktuellen Scrollposition.
+  function _contentOverflow() {
+    var c = document.getElementById('zones-container');
+    if (!c) return 0;
+    var unten = c.getBoundingClientRect().bottom + (window.pageYOffset || 0);
+    return Math.round(unten + 16 - window.innerHeight);   // 16 = padding von .main
+  }
+
+  // Beide berechneten Modi teilen sich dieselbe Rechnung, nur die Untergrenze
+  // unterscheidet sie.
+  function _isFitMode() {
+    return _tileHeightMode === 'fit' || _tileHeightMode === 'fit2x2';
+  }
+
+  // Aufteilung 2 x 2: zwei Spalten (per CSS-Klasse) und eine Kachelhoehe, bei
+  // der zwei Reihen den sichtbaren Bereich genau ausfuellen. Gedacht fuer das
+  // kleine Shelly Wall Display, wo vier grosse Kacheln pro Bildschirm die
+  // brauchbarste Aufteilung sind. Weitere Geraete liegen darunter und werden
+  // durch Scrollen erreicht — anders als bei "Passend" ist das hier gewollt,
+  // die Kachelgroesse haengt nicht an der Geraetezahl.
+  function _fit2x2() {
+    var grid = document.querySelector('.device-grid');
+    if (!grid) return 0;
+    // Dokumentkoordinate der Rasteroberkante: so ist die Rechnung unabhaengig
+    // davon, ob gerade gescrollt ist.
+    var oben = grid.getBoundingClientRect().top + (window.pageYOffset || 0);
+    var stil = window.getComputedStyle(grid);
+    var abstand = parseInt(stil.rowGap || stil.gridRowGap, 10) || 10;
+    var platz = window.innerHeight - oben - 16;   // 16 = padding unten von .main
+    var h = Math.floor((platz - abstand) / 2);
+    return Math.max(_FIT_MIN, Math.min(_FIT_MAX, h));
+  }
+
+  function _fitTiles() {
+    if (!_isFitMode()) return;
+    var zeilen = _gridRows();
+    if (!zeilen) return;
+
+    // Die eingestellte Kachelbreite bleibt unangetastet. Es waere verlockend,
+    // sie eine Stufe zu verkleinern — schmalere Kacheln sind auch niedriger,
+    // damit passten mehr Zeilen auf den Schirm. Verworfen: wer L waehlt, will
+    // L und nicht heimlich M mit einer Spalte mehr. Einzige Ausnahme ist 2 x 2,
+    // wo die Spaltenzahl der Zweck der Einstellung ist und nicht ihr Nebeneffekt.
+    document.documentElement.style.setProperty('--tile-min', _tileMinPx + 'px');
+
+    var h;
+    if (_tileHeightMode === 'fit2x2') {
+      h = _fit2x2();
+      document.documentElement.style.setProperty('--tile-h', h + 'px');
+    } else {
+      h = parseInt(window.getComputedStyle(document.documentElement)
+        .getPropertyValue('--tile-h'), 10) || 100;
+      for (var runde = 0; runde < 6; runde++) {
+        var diff = _contentOverflow();
+        if (Math.abs(diff) <= 2) break;
+        var neu = Math.max(_FIT_MIN, Math.min(_FIT_MAX, h - Math.round(diff / zeilen)));
+        if (neu === h) break;          // Grenze erreicht, weiter bringt nichts
+        h = neu;
+        document.documentElement.style.setProperty('--tile-h', h + 'px');
+      }
+    }
+
+    // Erst ganz am Schluss entscheiden, wie viel Inhalt in die Kachel passt.
+    // Das aendert die Kachelhoehe nicht mehr (sie ist fest), nur den Inhalt —
+    // die Schleife oben bleibt davon also unberuehrt.
+    document.body.classList.toggle('fit-compact', h < _FIT_ROOMY);
+  }
+
+  function _scheduleFit() {
+    if (!_isFitMode()) return;
+    if (_fitTimer) clearTimeout(_fitTimer);
+    _fitTimer = setTimeout(_fitTiles, 60);
+  }
+
   function _syncHeaderHeight() {
     var h = document.querySelector('.header');
     if (!h) return;
@@ -3071,6 +3204,8 @@
   }
 
   // ── Start ───────────────────────────────────────────
+  window.addEventListener('resize', _scheduleFit);
+
   function _boot() { applyI18n(); _watchHeaderHeight(); loadData(); }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _boot);
