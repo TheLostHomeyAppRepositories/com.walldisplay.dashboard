@@ -614,14 +614,11 @@ class ShellyWallDisplayApp extends Homey.App {
       //                  &redirect_uri=homeassistant://auth-callback
       // Erwartet wird ein Sprung auf die redirect_uri mit ?code=...
       //
-      // Gemessen an einem echten Home Assistant: dort kommt hier 200 text/html mit
-      // <ha-authorize>, und der Sprung auf die redirect_uri passiert erst im
-      // Browser. Eine 302-Antwort, wie sie 1.3.70 schickte, gibt es dort nie.
-      // Vermutung, warum das den Unterschied macht: das Display ist ein
-      // Android-WebView, und der faengt eine server-seitige Weiterleitung auf ein
-      // fremdes URL-Schema nicht ab. Nachgemessen ist das nicht — sicher ist nur,
-      // dass die Seite der Form des Originals entspricht und die Weiterleitung nicht.
-      // Angemeldet wird hier ohnehin niemand, die Seite fuehrt also direkt weiter.
+      // Gemessen an einem echten Home Assistant: dort kommt hier 200 text/html,
+      // und der Sprung auf die redirect_uri passiert erst im Browser, nachdem der
+      // Benutzer getippt hat. Eine 302-Antwort, wie sie 1.3.70 schickte, gibt es
+      // dort nie — und eine Seite, die von selbst weiterspringt, ebenso wenig.
+      // Angemeldet wird hier ohnehin niemand, die Seite zeigt also nur den Knopf.
       const redirectUri  = url.searchParams.get('redirect_uri');
       const state        = url.searchParams.get('state');
       const responseType = url.searchParams.get('response_type');
@@ -2176,28 +2173,41 @@ class ShellyWallDisplayApp extends Homey.App {
       .replace(/'/g, '&#39;');
   }
 
-  // Die Anmeldeseite fuer /auth/authorize. Bewusst ES5 und ohne externe Dateien:
-  // Zielbrowser ist der WebView des Wall Displays (Chrome 55).
-  // Der Sprung erfolgt aus dem Skript. Der meta-refresh steht in <noscript>, damit
-  // er nur greift, wenn kein JavaScript laeuft — sonst wuerde er dieselbe
-  // ?code=-Adresse ein zweites Mal zustellen, falls die Seite nach dem Sprung
-  // stehen bleibt. Der sichtbare Link bleibt als letzter Rueckfall.
+  // Die Anmeldeseite fuer /auth/authorize.
+  //
+  // Der Sprung auf homeassistant://… passiert ausschliesslich, wenn der Benutzer
+  // tippt — nie von selbst. Das ist der Kern: ein Android-WebView reicht eine
+  // Navigation, die waehrend des Ladens und ohne Benutzergeste ausgeloest wird,
+  // haeufig nicht an shouldOverrideUrlLoading weiter. Die App bekommt den
+  // Callback dann nie zu sehen, und der WebView versucht das fremde Schema
+  // selbst zu laden und scheitert. Genau so verhielt sich 1.3.71/1.3.72: die
+  // Seite kam an, der Code wurde ausgestellt, ein /auth/token folgte nie.
+  // Die echte Anmeldeseite von Home Assistant navigiert ebenfalls nie von
+  // selbst — dort tippt der Benutzer auf "Log in".
+  //
+  // Darum ein schlichter Link, kein Skript: er funktioniert mit und ohne
+  // JavaScript, und ein angetippter Link ist die Navigationsart, die ein
+  // WebView am zuverlaessigsten an die App weiterreicht.
   _authorizePage(target) {
-    const js   = JSON.stringify(target).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
     const attr = this._escapeHtml(target);
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'
       + '<title>Home Assistant</title>'
       + '<meta name="viewport" content="width=device-width,initial-scale=1">'
-      + '<noscript><meta http-equiv="refresh" content="0;url=' + attr + '"></noscript>'
       + '<style>body{font-family:Roboto,Noto,sans-serif;margin:0;display:flex;'
-      + 'align-items:center;justify-content:center;height:100vh;'
+      + 'align-items:center;justify-content:center;min-height:100vh;'
       + 'background:#fafafa;color:#212121}'
+      + '.box{text-align:center;padding:24px;max-width:320px}'
+      + '.t{font-size:20px;margin:0 0 8px}'
+      + '.s{font-size:14px;opacity:.7;margin:0 0 28px}'
+      + '.b{display:block;padding:14px 24px;min-height:44px;box-sizing:border-box;'
+      + 'background:#03a9f4;color:#fff;text-decoration:none;border-radius:4px;'
+      + 'font-size:16px;text-transform:uppercase;letter-spacing:.5px}'
       + '@media (prefers-color-scheme:dark){body{background:#111;color:#e1e1e1}}'
-      + 'a{color:#03a9f4}</style></head><body><div style="text-align:center">'
-      + '<p>Home Assistant</p><p><a id="continue" href="' + attr + '">Continue</a></p>'
-      + '</div><script>(function(){var z=' + js + ';try{window.location.replace(z);}'
-      + 'catch(e){try{window.location.href=z;}catch(e2){}}})();<\/script>'
-      + '</body></html>';
+      + '</style></head><body><div class="box">'
+      + '<p class="t">Home Assistant</p>'
+      + '<p class="s">Tap to finish signing in.</p>'
+      + '<a class="b" href="' + attr + '">Log in</a>'
+      + '</div></body></html>';
   }
 
   // Begrenzt die Weiterleitung auf das, was ein Display-Client wirklich
