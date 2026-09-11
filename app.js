@@ -197,7 +197,7 @@ class ShellyWallDisplayApp extends Homey.App {
   async _initHomeyApi() {
     try {
       // Direkt HomeyAPI-Klasse laden (nicht index.js), da index.js HomeyAPIV3
-      // eager-loaded, welches socket.io-client benÃ¶tigt â€“ diese Sub-Dependency
+      // eager-loaded, welches socket.io-client benötigt – diese Sub-Dependency
       // fehlt im Homey-Runtime-Environment.
       const HomeyAPI = require('homey-api/lib/HomeyAPI/HomeyAPI');
       this.homeyApi = await HomeyAPI.createAppAPI({ homey: this.homey });
@@ -249,12 +249,12 @@ class ShellyWallDisplayApp extends Homey.App {
         this.error('Capability-Subscriptions Fehler:', e.message)
       );
 
-      // Initiales BefÃ¼llen des Caches (ohne await â€” App soll nicht blockieren)
+      // Initiales Befüllen des Caches (ohne await — App soll nicht blockieren)
       this._updateDeviceSettingsCache().catch((e) =>
         this.error('Device-Settings-Cache Fehler:', e.message)
       );
 
-      // Flow-Cache befÃ¼llen
+      // Flow-Cache befüllen
       this._updateFlowSettingsCache().catch((e) =>
         this.error('Flow-Settings-Cache Fehler:', e.message)
       );
@@ -283,7 +283,7 @@ class ShellyWallDisplayApp extends Homey.App {
     }
   }
 
-  // Schreibt alle GerÃ¤te + Zonen als kompakte JSON-Arrays in Homey-Settings.
+  // Schreibt alle Geräte + Zonen als kompakte JSON-Arrays in Homey-Settings.
   // Wird bei App-Start, device.create und device.delete aufgerufen.
   async _updateDeviceSettingsCache() {
     if (!this.homeyApi) return;
@@ -303,7 +303,7 @@ class ShellyWallDisplayApp extends Homey.App {
     }));
     this.homey.settings.set('cachedDevices', devices);
     this.homey.settings.set('cachedZones',   zones);
-    this.log(`Device-Settings-Cache aktualisiert: ${devices.length} GerÃ¤te, ${zones.length} Zonen`);
+    this.log(`Device-Settings-Cache aktualisiert: ${devices.length} Geräte, ${zones.length} Zonen`);
   }
 
   // Schreibt alle triggerbaren Flows (Basic + Advanced) in Homey-Settings-Cache.
@@ -403,7 +403,7 @@ class ShellyWallDisplayApp extends Homey.App {
         try { client.write(':\n\n'); } catch (_) { this.sseClients.delete(client); }
       }
     }, 25000);
-    this.log(`Dashboard lÃ¤uft auf: ${url}`);
+    this.log(`Dashboard läuft auf: ${url} (App ${this._appVersion()})`);
     this.homey.settings.set('currentUrl', url);
   }
 
@@ -419,7 +419,7 @@ class ShellyWallDisplayApp extends Homey.App {
 
     // HA-kompatible Security-Header
     // CORS offen lassen: Homey Settings-Seite wird von my.homey.app geladen und
-    // benÃ¶tigt Cross-Origin-Zugriff auf die lokale API. Auf einem lokalen Heimserver
+    // benötigt Cross-Origin-Zugriff auf die lokale API. Auf einem lokalen Heimserver
     // ist '*' vertretbar, da der Port nicht aus dem Internet erreichbar ist.
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -520,8 +520,8 @@ class ShellyWallDisplayApp extends Homey.App {
   async _handleAPI(req, res, url) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    // â”€â”€ Home Assistant KompatibilitÃ¤ts-Endpunkte â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Das Shelly Wall Display prÃ¼ft diese Endpunkte um eine gÃ¼ltige HA-Instanz zu verifizieren.
+    // ── Home Assistant Kompatibilitäts-Endpunkte ──────────────────────────────
+    // Das Shelly Wall Display prüft diese Endpunkte um eine gültige HA-Instanz zu verifizieren.
 
     if (url.pathname === '/api/' || url.pathname === '/api') {
       res.writeHead(200);
@@ -550,7 +550,7 @@ class ShellyWallDisplayApp extends Homey.App {
       return;
     }
 
-    // HA Auth-Endpunkte â€” minimal, damit kein Auth-Fehler erscheint
+    // HA Auth-Endpunkte — minimal, damit kein Auth-Fehler erscheint
 
     // Dieser Endpoint wird vom Shelly Wall Display zur Validierung aufgerufen
     if (url.pathname === '/auth/providers') {
@@ -585,7 +585,7 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     if (url.pathname.match(/^\/auth\/login_flow\/[^/]+$/) && req.method === 'POST') {
-      // Schritt 2: Credentials akzeptieren, Code zurÃ¼ckgeben
+      // Schritt 2: Credentials akzeptieren, Code zurückgeben
       const code = crypto.randomBytes(16).toString('hex');
       res.writeHead(200);
       res.end(JSON.stringify({
@@ -629,7 +629,7 @@ class ShellyWallDisplayApp extends Homey.App {
           + (redirectUri.indexOf('?') === -1 ? '?' : '&')
           + 'code=' + encodeURIComponent(code);
         if (state !== null) target += '&state=' + encodeURIComponent(state);
-        this.log(`Auth-Code ausgestellt, Anmeldeseite leitet nach ${redirectUri}`);
+        this.log(`Auth-Code ausgestellt (App ${this._appVersion()}), Anmeldeseite mit Log-in-Knopf nach ${redirectUri}`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.writeHead(200);
@@ -644,11 +644,11 @@ class ShellyWallDisplayApp extends Homey.App {
       res.end();
       return;
     }
-    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (!this.homeyApi) {
       res.writeHead(503);
-      res.end(JSON.stringify({ error: 'Homey API nicht verfÃ¼gbar' }));
+      res.end(JSON.stringify({ error: 'Homey API nicht verfügbar' }));
       return;
     }
 
@@ -772,7 +772,7 @@ class ShellyWallDisplayApp extends Homey.App {
           const p = Number(value);
           if (!Number.isInteger(p) || p < 1024 || p > 65535) {
             res.writeHead(400);
-            res.end(JSON.stringify({ error: 'Invalid port (1024â€“65535)' }));
+            res.end(JSON.stringify({ error: 'Invalid port (1024–65535)' }));
             return;
           }
         }
@@ -785,7 +785,7 @@ class ShellyWallDisplayApp extends Homey.App {
           const ts = Number(value);
           if (!Number.isInteger(ts) || ts < 1 || ts > 5) {
             res.writeHead(400);
-            res.end(JSON.stringify({ error: 'tileSize must be 1â€“5' }));
+            res.end(JSON.stringify({ error: 'tileSize must be 1–5' }));
             return;
           }
         }
@@ -857,7 +857,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/alldevices â€” ungefiltert, nur fÃ¼r die Settings-Seite
+      // GET /api/alldevices — ungefiltert, nur für die Settings-Seite
       if (url.pathname === '/api/alldevices' && req.method === 'GET') {
         const devices = await this._getDevicesCache(); // #17
         const result = Object.values(devices).map((d) => ({
@@ -880,7 +880,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/flows â€” alle auslösbaren Flows für das Dashboard (aus Settings-Cache)
+      // GET /api/flows — alle auslösbaren Flows für das Dashboard (aus Settings-Cache)
       if (url.pathname === '/api/flows' && req.method === 'GET') {
         // cachedFlows enthält bereits nur triggerbare Flows — kein filter() nötig
         const flows = this.homey.settings.get('cachedFlows') || [];
@@ -957,7 +957,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // POST /api/flow/:id/trigger â€” Flow manuell auslösen
+      // POST /api/flow/:id/trigger — Flow manuell auslösen
       const flowTriggerMatch = url.pathname.match(/^\/api\/flow\/([^/]+)\/trigger$/);
       if (flowTriggerMatch && req.method === 'POST') {
         const flowId = flowTriggerMatch[1];
@@ -970,7 +970,7 @@ class ShellyWallDisplayApp extends Homey.App {
         const flowType = flowInfo ? flowInfo.type : null;
         this.log(`Flow trigger: id=${flowId} type=${flowType || 'unknown'}`);
 
-        // Methode 1: SDK â€” Basic Flow (nur wenn Typ passt oder unbekannt)
+        // Methode 1: SDK — Basic Flow (nur wenn Typ passt oder unbekannt)
         if (!triggered && flowType !== 'advancedflow') {
           try {
             await this.homeyApi.flow.triggerFlow({ id: flowId });
@@ -982,7 +982,7 @@ class ShellyWallDisplayApp extends Homey.App {
           }
         }
 
-        // Methode 2: SDK â€” Advanced Flow (nur wenn Typ passt oder Methode 1 fehlschlug)
+        // Methode 2: SDK — Advanced Flow (nur wenn Typ passt oder Methode 1 fehlschlug)
         if (!triggered && flowType !== 'flow') {
           try {
             await this.homeyApi.flow.triggerAdvancedFlow({ id: flowId });
@@ -1051,7 +1051,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/icon-proxy?url=... â€” Homey-Icon mit Auth proxyen
+      // GET /api/icon-proxy?url=... — Homey-Icon mit Auth proxyen
       if (url.pathname === '/api/icon-proxy' && req.method === 'GET') {
         const iconUrl = url.searchParams.get('url');
         // #10 SSRF-Schutz: nur http/https, keine Loopback/Link-Local-Adressen
@@ -1088,10 +1088,10 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/debug/insights â€” verfÃ¼gbare Insights-Logs fÃ¼r alle Energie-GerÃ¤te
+      // GET /api/debug/insights — verfügbare Insights-Logs für alle Energie-Geräte
       if (url.pathname === '/api/debug/insights' && req.method === 'GET') {
         const devices = await this._getDevicesCache();
-        // Energie-GerÃ¤te finden
+        // Energie-Geräte finden
         const energyDeviceIds = Object.values(devices)
           .filter((d) => {
             const en = d.energy || {};
@@ -1488,7 +1488,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/debug/energy â€” raw energy device data for classification debugging
+      // GET /api/debug/energy — raw energy device data for classification debugging
       if (url.pathname === '/api/debug/energy' && req.method === 'GET') {
         const devices = await this.homeyApi.devices.getDevices();
         const result = Object.values(devices)
@@ -1517,21 +1517,21 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // GET /api/energy/history?days=7  â€” tÃ¤gliche kWh-Werte aus Homey Insights
+      // GET /api/energy/history?days=7  — tägliche kWh-Werte aus Homey Insights
       if (url.pathname === '/api/energy/history' && req.method === 'GET') {
         const numDays = Math.min(parseInt(url.searchParams.get('days') || '7', 10), 14);
 
-        // Zeitbereich: einen Tag extra fÃ¼r das Delta des ersten Tages
+        // Zeitbereich: einen Tag extra für das Delta des ersten Tages
         const now      = new Date();
         const dateFrom = new Date(now.getTime() - (numDays + 1) * 24 * 60 * 60 * 1000);
 
-        // Alle verfÃ¼gbaren Insights-Log-IDs fÃ¼r ein GerÃ¤t ermitteln.
-        // getLogs() gibt ein Objekt zurÃ¼ck, dessen KEYS die vollen kombinierten Strings
-        // "homey:device:UUID:capId" sind â€“ daher mÃ¼ssen wir Object.keys() verwenden
-        // und das PrÃ¤fix abschneiden, um nur den capId-Teil zu erhalten.
+        // Alle verfügbaren Insights-Log-IDs für ein Gerät ermitteln.
+        // getLogs() gibt ein Objekt zurück, dessen KEYS die vollen kombinierten Strings
+        // "homey:device:UUID:capId" sind – daher müssen wir Object.keys() verwenden
+        // und das Präfix abschneiden, um nur den capId-Teil zu erhalten.
         const getDeviceLogIds = async (deviceId) => {
           const prefix = `homey:device:${deviceId}:`;
-          // Methode 1: getLogs mit URI-Filter (gibt ggf. bereits gefiltert zurÃ¼ck)
+          // Methode 1: getLogs mit URI-Filter (gibt ggf. bereits gefiltert zurück)
           try {
             const logs = await this.homeyApi.insights.getLogs({ uri: `homey:device:${deviceId}` });
             if (logs && Object.keys(logs).length) {
@@ -1544,7 +1544,7 @@ class ShellyWallDisplayApp extends Homey.App {
               }
             }
           } catch (_) {}
-          // Methode 2: getLogs ohne Filter, manuell per Key-PrÃ¤fix filtern
+          // Methode 2: getLogs ohne Filter, manuell per Key-Präfix filtern
           try {
             const all = await this.homeyApi.insights.getLogs();
             const ids = Object.keys(all)
@@ -1556,7 +1556,7 @@ class ShellyWallDisplayApp extends Homey.App {
           return new Set();
         };
 
-        // Geordnete Kandidatenliste fÃ¼r Grid-Import-Cap aufbauen
+        // Geordnete Kandidatenliste für Grid-Import-Cap aufbauen
         const gridCapCandidates = (caps, en, logIds) => {
           const hints = [
             en.meterPowerImportedCapability,
@@ -1564,20 +1564,20 @@ class ShellyWallDisplayApp extends Homey.App {
             'meter_power.used',     'meter_power',
           ].filter(Boolean);
           const ordered = [];
-          // Prio 1: Im GerÃ¤t UND in Insights geloggt
+          // Prio 1: Im Gerät UND in Insights geloggt
           for (const c of hints) if (caps[c] && logIds.has(c) && !ordered.includes(c)) ordered.push(c);
           // Prio 2: Nur in Insights geloggt
           for (const c of hints) if (logIds.has(c) && !ordered.includes(c)) ordered.push(c);
           // Prio 3: Beliebiges meter_power.* aus Insights
           for (const id of logIds) if (id.startsWith('meter_power') && !ordered.includes(id)) ordered.push(id);
-          // Prio 4: Capability-basiert (kein Insights-Nachweis nÃ¶tig â€“ Fallback wenn getLogs fehlschlug)
+          // Prio 4: Capability-basiert (kein Insights-Nachweis nötig – Fallback wenn getLogs fehlschlug)
           for (const c of hints) if (caps[c] && !ordered.includes(c)) ordered.push(c);
           // Prio 5: Letzter Ausweg
           for (const c of hints) if (!ordered.includes(c)) ordered.push(c);
           return ordered;
         };
 
-        // Geordnete Kandidatenliste fÃ¼r Grid-Export-Cap (Netz-Einspeisung) aufbauen
+        // Geordnete Kandidatenliste für Grid-Export-Cap (Netz-Einspeisung) aufbauen
         const gridExportCapCandidates = (caps, en, logIds) => {
           const hints = [
             en.meterPowerExportedCapability,
@@ -1590,7 +1590,7 @@ class ShellyWallDisplayApp extends Homey.App {
           return ordered;
         };
 
-        // Geordnete Kandidatenliste fÃ¼r Solar-Export-Cap aufbauen
+        // Geordnete Kandidatenliste für Solar-Export-Cap aufbauen
         const solarCapCandidates = (caps, en, logIds) => {
           const hints = [
             en.meterPowerExportedCapability,
@@ -1606,7 +1606,7 @@ class ShellyWallDisplayApp extends Homey.App {
           return ordered;
         };
 
-        // GerÃ¤te klassifizieren (gleiche Logik wie /api/energy)
+        // Geräte klassifizieren (gleiche Logik wie /api/energy)
         const devicesAll = await this._getDevicesCache();
         const gridDevices  = [];
         const solarDevices = [];
@@ -1633,7 +1633,7 @@ class ShellyWallDisplayApp extends Homey.App {
           }
         }
 
-        // Tag-Buckets aufbauen (Ã¤ltester zuerst)
+        // Tag-Buckets aufbauen (ältester zuerst)
         const dayBuckets = [];
         for (let i = numDays - 1; i >= 0; i--) {
           const d = new Date(now);
@@ -1643,7 +1643,7 @@ class ShellyWallDisplayApp extends Homey.App {
         }
 
         // Hilfsfunktion: Insights-Rohdaten per direktem HTTP holen (umgeht SDK-Probleme).
-        // Gibt { data, status, bodySnippet } zurÃ¼ck, damit getDailyKwh Debug-Info aufzeichnen kann.
+        // Gibt { data, status, bodySnippet } zurück, damit getDailyKwh Debug-Info aufzeichnen kann.
         const getInsightsHttp = async (deviceId, capId, resolution) => {
           const token = await this._getOwnerToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -1654,9 +1654,9 @@ class ShellyWallDisplayApp extends Homey.App {
           //   /api/manager/insights/log/homey%3Adevice%3AUUID/capId/entry
           // Format B: URI roh (mit Doppelpunkten) + capId
           //   /api/manager/insights/log/homey:device:UUID/capId/entry
-          // Format C: vollstÃ¤ndiger Log-Key URL-encoded als einziges Segment
+          // Format C: vollständiger Log-Key URL-encoded als einziges Segment
           //   /api/manager/insights/log/homey%3Adevice%3AUUID%3AcapId/entry
-          // Format D: vollstÃ¤ndiger Log-Key roh als einziges Segment
+          // Format D: vollständiger Log-Key roh als einziges Segment
           //   /api/manager/insights/log/homey:device:UUID:capId/entry
           const encodedUri = encodeURIComponent(`homey:device:${deviceId}`);
           const encodedFullId = encodeURIComponent(`homey:device:${deviceId}:${capId}`);
@@ -1698,14 +1698,14 @@ class ShellyWallDisplayApp extends Homey.App {
             if (r.data && r.data.values && r.data.values.length > 0) {
               return { ...r, bodySnippet: results.map(x => `${x.label}(${x.status}):${x.bodySnippet}`).join('|') };
             }
-            // Sobald ein Format > 404 (z.B. 200 oder 401) zurÃ¼ckgibt, nicht weiter probieren
+            // Sobald ein Format > 404 (z.B. 200 oder 401) zurückgibt, nicht weiter probieren
             if (r.status !== 404 && r.status !== 0) break;
           }
           const best = results.find(r => r.data && r.data.values) || results[0];
           return { ...(best || { data: null, status: 0 }), bodySnippet: results.map(x => `${x.label}(${x.status}):${x.bodySnippet.slice(0,20)}`).join('|') };
         };
 
-        // Hilfsfunktion: tÃ¤gliche kWh â€“ probiert alle capList-Kandidaten der Reihe nach
+        // Hilfsfunktion: tägliche kWh – probiert alle capList-Kandidaten der Reihe nach
         const getDailyKwh = async (deviceId, capList) => {
           const dbgLog = [];
           const hasSdk = this.homeyApi.insights &&
@@ -1715,12 +1715,12 @@ class ShellyWallDisplayApp extends Homey.App {
             let entries = null;
 
             // Methode 1: homeyApi.insights SDK.
-            // Die API erwartet den vollstÃ¤ndigen Log-Key als "id" â€“
+            // Die API erwartet den vollständigen Log-Key als "id" –
             // NICHT nur den Cap-Namen. Fehlermeldung "Not Found: LogLocal with ID meter_power"
-            // tritt auf, wenn nur der kurze Name ohne PrÃ¤fix Ã¼bergeben wird.
+            // tritt auf, wenn nur der kurze Name ohne Präfix übergeben wird.
             if (hasSdk) {
-              // Homey Insights resolution-Strings verwenden camelCase mit GroÃŸbuchstabe:
-              // 'last14Days', 'last7Days', 'last31Days' â€“ NICHT 'last14days' (lowercase).
+              // Homey Insights resolution-Strings verwenden camelCase mit Großbuchstabe:
+              // 'last14Days', 'last7Days', 'last31Days' – NICHT 'last14days' (lowercase).
               const fullId = `homey:device:${deviceId}:${capId}`;
               for (const res of ['last14Days', 'last7Days', 'last31Days']) {
                 try {
@@ -1731,7 +1731,7 @@ class ShellyWallDisplayApp extends Homey.App {
                   dbgLog.push(`sdk:${capId}:${res}:${cnt}`);
                   if (cnt > 1) { entries = r; break; }
                 } catch (e) {
-                  // fullId fehlgeschlagen â€“ kurzen Cap-Namen als Fallback probieren
+                  // fullId fehlgeschlagen – kurzen Cap-Namen als Fallback probieren
                   try {
                     const r2 = await this.homeyApi.insights.getLogEntries({
                       uri: `homey:device:${deviceId}`, id: capId, resolution: res,
@@ -1755,9 +1755,9 @@ class ShellyWallDisplayApp extends Homey.App {
               }
             }
 
-            if (!entries || !entries.values || entries.values.length < 2) continue; // nÃ¤chsten Kandidaten probieren
+            if (!entries || !entries.values || entries.values.length < 2) continue; // nächsten Kandidaten probieren
 
-          // Pro Tag: Maximum nehmen (= letzter Wert des Tages bei kumulativem ZÃ¤hler)
+          // Pro Tag: Maximum nehmen (= letzter Wert des Tages bei kumulativem Zähler)
           const maxPerDay = {};
           for (const entry of entries.values) {
             if (entry.v === null || entry.v === undefined) continue;
@@ -1904,7 +1904,7 @@ class ShellyWallDisplayApp extends Homey.App {
           // Skip devices excluded from energy reporting (Homey "Exclude from Energy" setting)
           if (en.excluded === true) continue;
 
-          // Detect energy type â€” check class first, then energy config, then capabilities
+          // Detect energy type — check class first, then energy config, then capabilities
           // meter_power.exported (not .returned) is specific to real grid/energy meters
           const hasExportedCap = !!(caps['meter_power.exported']);
           const hasImportedCap = !!(caps['meter_power.imported'] || caps['meter_power.consumed']
@@ -2156,12 +2156,23 @@ class ShellyWallDisplayApp extends Homey.App {
     });
   }
 
-  // â”€â”€ HA WebSocket-Protokoll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Shelly Wall Display prÃ¼ft /api/websocket mit dem HA Auth-Handshake
+  // ── HA WebSocket-Protokoll ────────────────────────────────────────────────
+  // Shelly Wall Display prüft /api/websocket mit dem HA Auth-Handshake
   // Eine Quelle fuer HTTP /api/config und den WebSocket-Befehl get_config.
   // components darf nicht leer bleiben: ein echtes Home Assistant meldet dort
   // die geladenen Komponenten, und ein leeres Feld faellt bei einer strengen
   // Pruefung auf.
+  // Die laufende App-Version, fuer die Log-Meldungen. Ohne sie liess sich aus
+  // einem Log-Auszug nicht ablesen, welcher Stand geantwortet hat — die
+  // Meldungen waren ueber mehrere Versionen hinweg wortgleich.
+  _appVersion() {
+    try {
+      return (this.homey.manifest && this.homey.manifest.version) || 'unbekannt';
+    } catch (_) {
+      return 'unbekannt';
+    }
+  }
+
   // Maskiert Text fuer ein HTML-Attribut. redirect_uri ist auf bekannte Schemata
   // begrenzt, Pfad und Query darin sind aber frei waehlbar.
   _escapeHtml(text) {
@@ -2278,7 +2289,7 @@ class ShellyWallDisplayApp extends Homey.App {
 
       // WS messages are too frequent to log (fires on every device update)
 
-      // Schritt 2: Auth-Request â†’ immer akzeptieren
+      // Schritt 2: Auth-Request → immer akzeptieren
       if (msg.type === 'auth') {
         authenticated = true;
         ws.send(JSON.stringify({ type: 'auth_ok', ha_version: HA_VERSION }));
@@ -2290,7 +2301,7 @@ class ShellyWallDisplayApp extends Homey.App {
         return;
       }
 
-      // Alle anderen Commands â†’ generisches OK
+      // Alle anderen Commands → generisches OK
       // Home-Assistant-Clients rufen direkt nach auth_ok get_config und
       // get_states auf und arbeiten mit dem Ergebnis weiter. Ein result:null
       // laesst einen Client, der ein Objekt oder eine Liste erwartet, auflaufen.
@@ -2320,9 +2331,9 @@ class ShellyWallDisplayApp extends Homey.App {
   }
 
   // Homey App-API: GET /api/app/com.shellywalldisplay.homey/info
-  // Gibt URL, Port, GerÃ¤te und Zonen zurÃ¼ck (alles in einem Call, um Mixed-Content zu vermeiden)
+  // Gibt URL, Port, Geräte und Zonen zurück (alles in einem Call, um Mixed-Content zu vermeiden)
   async onGet(args) {
-    // Homey OS kann onGet() ohne Argument aufrufen â†’ safe default
+    // Homey OS kann onGet() ohne Argument aufrufen → safe default
     const { query } = (args || {});
     const port = this.homey.settings.get('port') || DEFAULT_PORT;
     const url = this.homey.settings.get('currentUrl') || null;
@@ -2359,9 +2370,9 @@ class ShellyWallDisplayApp extends Homey.App {
   }
 
   // Baut eine absolute Icon-URL aus verschiedenen Homey-Formaten:
-  // - Absolute URL ("http...")           â†’ unverÃ¤ndert (via icon-proxy)
-  // - Relativer Pfad ("/api/icon/...")   â†’ homeyBaseUrl + Pfad (via icon-proxy)
-  // - Interne Icon-Name ("garage-door")  â†’ /device-icons/{name}.svg (eigener Server, kein Proxy)
+  // - Absolute URL ("http...")           → unverändert (via icon-proxy)
+  // - Relativer Pfad ("/api/icon/...")   → homeyBaseUrl + Pfad (via icon-proxy)
+  // - Interne Icon-Name ("garage-door")  → /device-icons/{name}.svg (eigener Server, kein Proxy)
   // Returns the Homey's LAN IP base URL (e.g. http://192.168.1.10) so that
   // debug URLs can be opened directly from a browser on the same network.
   // Falls back to homeyBaseUrl (127.0.0.1) if no external interface is found.
@@ -2391,11 +2402,11 @@ class ShellyWallDisplayApp extends Homey.App {
     if (!iconUrl) return null;
     if (iconUrl.startsWith('http')) return iconUrl;
     if (iconUrl.startsWith('/') && this.homeyBaseUrl) return this.homeyBaseUrl + iconUrl;
-    // Interner Homey-Icon-Name â†’ wird vom eigenen Dashboard-Server ausgeliefert
+    // Interner Homey-Icon-Name → wird vom eigenen Dashboard-Server ausgeliefert
     return `/device-icons/${iconUrl}.svg`;
   }
 
-  // #8 PrÃ¼ft ob ein Origin-Header von einem lokalen Netzwerk stammt
+  // #8 Prüft ob ein Origin-Header von einem lokalen Netzwerk stammt
   _isLocalOrigin(origin) {
     try {
       const host = new URL(origin).hostname;
@@ -2597,7 +2608,7 @@ class ShellyWallDisplayApp extends Homey.App {
     return this._ownerToken;
   }
 
-  // Gibt die LAN-IP der Homey zurÃ¼ck (bevorzugt 10.x / 192.168.x, Ã¼berspringt Loopback + Docker)
+  // Gibt die LAN-IP der Homey zurück (bevorzugt 10.x / 192.168.x, überspringt Loopback + Docker)
   _getLanIP() {
     const ifaces = os.networkInterfaces();
     const candidates = [];
@@ -2612,7 +2623,7 @@ class ShellyWallDisplayApp extends Homey.App {
         } else if (!ip.startsWith('172.')) {
           candidates.push(ip);
         }
-        // 172.x.x.x (Docker-Bridge) wird Ã¼bersprungen
+        // 172.x.x.x (Docker-Bridge) wird übersprungen
       }
     }
 
