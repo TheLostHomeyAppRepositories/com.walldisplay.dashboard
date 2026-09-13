@@ -436,7 +436,10 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     const auth = req.headers['authorization'] ? ' [Bearer]' : '';
-    const ua = req.headers['user-agent'] ? ` UA:${req.headers['user-agent'].substring(0, 40)}` : '';
+    // 120 statt 40 Zeichen: die Browser-Version steht im User-Agent weit
+    // hinten, und genau sie entscheidet, welche CSS- und JS-Moeglichkeiten
+    // auf einem Display zur Verfuegung stehen.
+    const ua = req.headers['user-agent'] ? ` UA:${req.headers['user-agent'].substring(0, 120)}` : '';
     if (!ShellyWallDisplayApp.SILENT_PATHS.has(url.pathname)) {
       this.log(`${req.method} ${url.pathname}${auth}${ua}`);
     }
@@ -604,6 +607,18 @@ class ShellyWallDisplayApp extends Homey.App {
         refresh_token: 'homey-refresh',
         token_type: 'Bearer',
       }));
+      return;
+    }
+
+    // Der Anmeldeablauf war bis hierher eine Blackbox: ob die Seite im Display
+    // ueberhaupt erscheint und ob jemand den Knopf trifft, erzeugt normalerweise
+    // keine Anfrage — der Sprung auf homeassistant:// geht direkt an Android.
+    // Diese beiden Meldungen schliessen die Luecke, ohne den Ablauf zu aendern.
+    if (url.pathname === '/auth/shown' || url.pathname === '/auth/tapped') {
+      const was = url.pathname === '/auth/shown' ? 'angezeigt' : 'Knopf getippt';
+      this.log(`Anmeldeseite ${was} (App ${this._appVersion()})`);
+      res.writeHead(204);
+      res.end();
       return;
     }
 
@@ -2201,6 +2216,12 @@ class ShellyWallDisplayApp extends Homey.App {
   // WebView am zuverlaessigsten an die App weiterreicht.
   _authorizePage(target) {
     const attr = this._escapeHtml(target);
+    // Ohne '&&' geschrieben: dieselbe Zeichenkette steht einmal in einem
+    // HTML-Attribut (dort muesste '&' als '&amp;' maskiert werden) und einmal
+    // in einem <script>-Block (dort waere '&amp;' kaputt). Mit 'if' passt sie
+    // unveraendert in beide Zusammenhaenge.
+    const melde = (pfad) => "try{if(navigator.sendBeacon)navigator.sendBeacon('"
+      + pfad + "')}catch(e){}";
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'
       + '<title>Home Assistant</title>'
       + '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -2217,8 +2238,15 @@ class ShellyWallDisplayApp extends Homey.App {
       + '</style></head><body><div class="box">'
       + '<p class="t">Home Assistant</p>'
       + '<p class="s">Tap to finish signing in.</p>'
-      + '<a class="b" href="' + attr + '">Log in</a>'
-      + '</div></body></html>';
+      + '<a class="b" href="' + attr + '" onclick="' + melde('/auth/tapped') + '">Log in</a>'
+      + '</div>'
+      // Zwei kurze Meldungen an den eigenen Server, damit im Log steht, ob die
+      // Seite erschienen ist und ob der Knopf getroffen wurde. sendBeacon ist
+      // genau dafuer gedacht und ueberlebt die folgende Navigation; fehlt es,
+      // passiert schlicht nichts. Der Sprung selbst bleibt eine reine
+      // Link-Navigation — daran aendert der Melder nichts.
+      + '<script>' + melde('/auth/shown') + '<\/script>'
+      + '</body></html>';
   }
 
   // Begrenzt die Weiterleitung auf das, was ein Display-Client wirklich
