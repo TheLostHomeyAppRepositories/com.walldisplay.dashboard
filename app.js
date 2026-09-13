@@ -10,6 +10,10 @@ const WebSocket = require('ws');
 
 // Gemeldete Home-Assistant-Version. Clients pruefen sie teils gegen eine
 // Mindestversion, deshalb zentral und aktuell gehalten.
+// Durchsichtiges 1x1-GIF fuer die Meldepunkte der Anmeldeseite.
+const PIXEL_GIF = Buffer.from(
+  'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
 const HA_VERSION = '2025.12.0';
 
 const DEFAULT_PORT = 7575;
@@ -384,6 +388,13 @@ class ShellyWallDisplayApp extends Homey.App {
 
   async _startServer(port) {
     this.server = http.createServer((req, res) => this._handleRequest(req, res));
+    // Node schliesst untaetige Keep-Alive-Verbindungen nach 5 s. Ein Client, der
+    // die Verbindung genau in dem Moment wiederverwendet, bekommt ein RST — im
+    // Browser net::ERR_CONNECTION_RESET, im Android-WebView ERROR_CONNECT (-6).
+    // 65 s liegt ueber dem, was gaengige Clients halten. headersTimeout muss
+    // darueber liegen, sonst greift er zuerst und das Rennen ist wieder da.
+    this.server.keepAliveTimeout = 65000;
+    this.server.headersTimeout = 66000;
     await new Promise((resolve, reject) => {
       this.server.listen(port, (err) => {
         if (err) return reject(err);
@@ -436,10 +447,11 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     const auth = req.headers['authorization'] ? ' [Bearer]' : '';
-    // 120 statt 40 Zeichen: die Browser-Version steht im User-Agent weit
-    // hinten, und genau sie entscheidet, welche CSS- und JS-Moeglichkeiten
-    // auf einem Display zur Verfuegung stehen.
-    const ua = req.headers['user-agent'] ? ` UA:${req.headers['user-agent'].substring(0, 120)}` : '';
+    // Die Browser-Version steht im User-Agent ganz hinten. Mit 120 Zeichen war
+    // sie bei einem Android-WebView immer noch abgeschnitten ("Version/4.0
+    // Chro"), deshalb 200 — genau diese Zahl entscheidet, welche CSS- und
+    // JS-Moeglichkeiten auf einem Display zur Verfuegung stehen.
+    const ua = req.headers['user-agent'] ? ` UA:${req.headers['user-agent'].substring(0, 200)}` : '';
     if (!ShellyWallDisplayApp.SILENT_PATHS.has(url.pathname)) {
       this.log(`${req.method} ${url.pathname}${auth}${ua}`);
     }
@@ -468,8 +480,7 @@ class ShellyWallDisplayApp extends Homey.App {
       // Das Dashboard verlinkt manifest.webmanifest, ist davon also nicht betroffen.
       res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
-      res.writeHead(200);
-      res.end(JSON.stringify({
+      const manifest = JSON.stringify({
         background_color: '#FFFFFF',
         description: 'Home automation platform that puts local control and privacy first.',
         dir: 'ltr',
@@ -490,7 +501,12 @@ class ShellyWallDisplayApp extends Homey.App {
         short_name: 'Home Assistant',
         start_url: '/?homescreen=1',
         theme_color: '#2980b9',
-      }));
+      });
+      // Wie beim echten Home Assistant (Content-Length: 1668) eine explizite
+      // Laenge statt chunked — der native Client des Displays holt diese Datei.
+      res.setHeader('Content-Length', Buffer.byteLength(manifest));
+      res.writeHead(200);
+      res.end(manifest);
       return;
     }
 
@@ -616,9 +632,25 @@ class ShellyWallDisplayApp extends Homey.App {
     // Diese beiden Meldungen schliessen die Luecke, ohne den Ablauf zu aendern.
     if (url.pathname === '/auth/shown' || url.pathname === '/auth/tapped') {
       const was = url.pathname === '/auth/shown' ? 'angezeigt' : 'Knopf getippt';
-      this.log(`Anmeldeseite ${was} (App ${this._appVersion()})`);
+      this.log(`Anmeldeseite ${was} [Skript] (App ${this._appVersion()})`);
       res.writeHead(204);
       res.end();
+      return;
+    }
+
+    // Dieselben zwei Ereignisse noch einmal, aber ohne JavaScript: ein
+    // 1x1-Bild in der Seite und ein Hintergrundbild am Knopf, das der Browser
+    // erst beim Druecken laedt. Trifft das Bild ein und die Skript-Meldung
+    // nicht, dann wurde die Seite sehr wohl angezeigt und im WebView ist
+    // JavaScript abgeschaltet — ohne diese Unterscheidung sieht beides im Log
+    // gleich aus.
+    if (url.pathname === '/auth/shown.gif' || url.pathname === '/auth/tapped.gif') {
+      const was = url.pathname === '/auth/shown.gif' ? 'angezeigt' : 'Knopf gedrueckt';
+      this.log(`Anmeldeseite ${was} [Bild] (App ${this._appVersion()})`);
+      res.setHeader('Content-Type', 'image/gif');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.writeHead(200);
+      res.end(PIXEL_GIF);
       return;
     }
 
@@ -645,10 +677,19 @@ class ShellyWallDisplayApp extends Homey.App {
           + 'code=' + encodeURIComponent(code);
         if (state !== null) target += '&state=' + encodeURIComponent(state);
         this.log(`Auth-Code ausgestellt (App ${this._appVersion()}), Anmeldeseite mit Log-in-Knopf nach ${redirectUri}`);
+        const seite = this._authorizePage(target);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
+        // Explizite Laenge statt chunked — so liefert es auch ein echtes Home
+        // Assistant, und ein HTTP-Stack, der mit dem Chunk-Ende hadert, haengt
+        // sonst bis der Server nach dem Keep-Alive-Timeout zumacht.
+        res.setHeader('Content-Length', Buffer.byteLength(seite));
+        // Die Verbindung nach dieser einen Antwort schliessen, damit der WebView
+        // sie gar nicht erst fuer die Meldepunkte wiederverwendet und ins
+        // Timeout-Rennen laeuft.
+        res.setHeader('Connection', 'close');
         res.writeHead(200);
-        res.end(this._authorizePage(target));
+        res.end(seite);
         return;
       }
 
@@ -2075,6 +2116,13 @@ class ShellyWallDisplayApp extends Homey.App {
     if (pathname === '/' || pathname === '') {
       pathname = '/index.html';
     }
+    // Browser und WebViews holen /favicon.ico ungefragt. Ohne diese Zeile gab es
+    // dort ein 404 bei jedem Seitenaufruf — eine Log-Zeile und ein
+    // Unterressourcen-Fehler pro Aufruf. Das App-Symbol liegt als PNG vor, und
+    // PNG an dieser Adresse versteht jeder Client; ein eigenes .ico braucht es nicht.
+    if (pathname === '/favicon.ico') {
+      pathname = '/icon-192.png';
+    }
 
     const filePath = path.join(__dirname, 'dashboard', pathname);
     const ext = path.extname(filePath).toLowerCase();
@@ -2235,10 +2283,14 @@ class ShellyWallDisplayApp extends Homey.App {
       + 'background:#03a9f4;color:#fff;text-decoration:none;border-radius:4px;'
       + 'font-size:16px;text-transform:uppercase;letter-spacing:.5px}'
       + '@media (prefers-color-scheme:dark){body{background:#111;color:#e1e1e1}}'
+      // Der Browser laedt dieses Hintergrundbild erst, wenn der Knopf
+      // gedrueckt wird — ein Meldepunkt fuer den Druck, ganz ohne Skript.
+      + '.b:active{background-image:url(/auth/tapped.gif)}'
       + '</style></head><body><div class="box">'
       + '<p class="t">Home Assistant</p>'
       + '<p class="s">Tap to finish signing in.</p>'
       + '<a class="b" href="' + attr + '" onclick="' + melde('/auth/tapped') + '">Log in</a>'
+      + '<img src="/auth/shown.gif" alt="" width="1" height="1">'
       + '</div>'
       // Zwei kurze Meldungen an den eigenen Server, damit im Log steht, ob die
       // Seite erschienen ist und ob der Knopf getroffen wurde. sendBeacon ist

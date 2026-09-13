@@ -43,7 +43,7 @@ The app runs a local HTTP/WebSocket server on your Homey that emulates the Home 
 - **Room order** — drag and drop rooms into any order via the Design settings
 - **Drag & drop reordering** — long-press a tile to drag it to a new position; order is saved across reloads
 - **Adjustable tile width** — choose from XS / S / M (default) / L / XL via the settings page
-- **Adjustable tile height** — Auto (content-driven) or Same as width, which sets a minimum height matching the configured tile width
+- **Adjustable tile height** — Auto (content-driven), Same as width (minimum height matching the configured tile width), Fit to screen (tile height shrinks until everything fits without scrolling) or 2 × 2 (two columns and two rows that exactly fill the screen — four large tiles per page, made for small wall displays)
 - **Tile layout** — values, status and device name always aligned to the bottom of each tile for a clean, consistent look
 - **Theme mode** — Light, Dark, Toggle (manual header button), or Auto (light 07:00–21:00, dark otherwise); configurable in Settings → Design; the header button is hidden in Light / Dark / Auto modes
 - **Clock** — live clock in the header, drift-corrected
@@ -199,7 +199,7 @@ The settings page is organised into four tabs:
 | **Blind controls** | For blinds that report both a position slider and up/down/stop: **Slider** / **Buttons** / **Both**. Blinds that only support up/down/stop always show the buttons. | Slider |
 | **Font Size** | Text size on device and flow tiles (1–5) | 1 |
 | **Tile Width** | Width of device tiles: XS / S / M / L / XL | M |
-| **Tile Height** | **Auto** — height follows content. **Same as width** — sets a minimum height matching the configured tile width. Note that tiles stretch to fill the row, so they will not always come out exactly square. | Auto |
+| **Tile Height** | **Auto** — height follows content. **Same as width** — sets a minimum height matching the configured tile width; tiles stretch to fill the row, so they will not always come out exactly square. **Fit to screen** — tile height shrinks until everything fits without scrolling; readings and status are dropped first and long names shortened, so the name never disappears. With very many devices the tiles reach their minimum and the page scrolls again. **2 × 2** — two columns and a tile height that makes two rows exactly fill the screen: four large tiles per page, further devices below. The only mode that overrides the tile width. | Auto |
 | **Flow Tile Width** | **Dynamic** — tiles size to their content. **Same as devices** — match device tile width. | Dynamic |
 | **Shortcut Bar Position** | Show the shortcut bar (flows, weather, Energy, EV) above or below device tiles | Above |
 

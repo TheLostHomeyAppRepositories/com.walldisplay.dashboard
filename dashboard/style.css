@@ -841,8 +841,11 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
 
 .dim-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  margin-top: -8px;          /* Knopf auf der 8-px-Spur zentrieren */
-  width: 24px; height: 24px;
+  /* 16 px statt 24: auf einer 8-px-Spur in einer kleinen Kachel wirkte der
+     Knopf klobig (Rueckmeldung aus dem Forum). Die Trefferflaeche leidet nicht
+     darunter — sie ist der 32 px hohe Eingabebereich oben, nicht der Knopf. */
+  margin-top: -4px;          /* (16 - 8) / 2 — Knopf auf der 8-px-Spur zentrieren */
+  width: 16px; height: 16px;
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
@@ -1849,9 +1852,11 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
 
 .light-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  margin-top: -7px;          /* Knopf auf der 10-px-Spur zentrieren */
-  width: 24px;
-  height: 24px;
+  /* 16 px wie beim Kachelregler (.dim-slider) — ein Mass fuer alle Regler.
+     Die Trefferflaeche bleibt der 32 px hohe Eingabebereich. */
+  margin-top: -3px;          /* (16 - 10) / 2 — Knopf auf der 10-px-Spur zentrieren */
+  width: 16px;
+  height: 16px;
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
@@ -1860,8 +1865,8 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
 }
 
 .light-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
