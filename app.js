@@ -456,6 +456,26 @@ class ShellyWallDisplayApp extends Homey.App {
       this.log(`${req.method} ${url.pathname}${auth}${ua}`);
     }
 
+    // Anmeldeablauf im Detail: Der Melder aus Issue 20 bekommt die Seite nie
+    // gerendert, obwohl der Server sie vollstaendig schreibt — und die Fehlerart
+    // wechselte mit dem Framing (chunked: Reset, Content-Length: Haengen). Das
+    // riecht nach einem Zwischenglied zwischen Server und Renderer. Die Header
+    // verraten, WER anfragt: X-Requested-With nennt das Android-Paket eines
+    // WebViews, Sec-Fetch-Dest eine echte Chromium-Navigation, HTTP/1.0 einen
+    // Proxy. finish/close zeigen, ob die Bytes den Server ueberhaupt verlassen.
+    if (url.pathname.startsWith('/auth/')) {
+      const kopf = Object.keys(req.headers)
+        .filter((k) => k !== 'user-agent')
+        .map((k) => `${k}=${String(req.headers[k]).substring(0, 120)}`)
+        .join(' | ');
+      this.log(`  ↳ HTTP/${req.httpVersion} von ${req.socket.remoteAddress} — ${kopf}`);
+      const t0 = Date.now();
+      res.once('finish', () => this.log(
+        `  ↳ Antwort fertig nach ${Date.now() - t0} ms, ${req.socket.bytesWritten} B auf dem Socket`));
+      req.socket.once('close', (hadError) => this.log(
+        `  ↳ Socket zu nach ${Date.now() - t0} ms${hadError ? ' — MIT FEHLER' : ''}`));
+    }
+
     if (url.pathname === '/ping') {
       res.setHeader('Content-Type', 'text/plain');
       res.writeHead(200);
