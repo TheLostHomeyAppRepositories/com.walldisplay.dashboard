@@ -602,23 +602,28 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     if (url.pathname === '/auth/login_flow' && req.method === 'POST') {
-      // Felder und Reihenfolge am echten Home Assistant gemessen —
-      // description_placeholders, last_step und preview fehlten bisher.
-      const flowId = crypto.randomBytes(16).toString('hex');
+      // Frueher kam hier ein Formular zurueck, das Benutzername und Passwort
+      // verlangte — feldgleich mit einem echten Home Assistant. Genau daran
+      // blieb das Wall Display haengen: sein Einrichtungsdialog kennt nur die
+      // Serveradresse, es gibt dort keine Anmeldefelder. Der Log des Melders
+      // zeigt es deutlich — Antwort in 3 ms vollstaendig geschrieben, dann
+      // neun Sekunden Stille, dann legt der Client auf.
+      //
+      // Hier wird ohnehin jede Anmeldung akzeptiert, ein Formular ist also
+      // Theater. Ein echtes Home Assistant mit trusted_networks antwortet in
+      // derselben Lage sofort mit create_entry und liefert den Code mit. Genau
+      // das passiert jetzt: der Client kann direkt zu /auth/token weitergehen.
+      const code = crypto.randomBytes(16).toString('hex');
       res.writeHead(200);
       res.end(JSON.stringify({
-        type: 'form',
-        flow_id: flowId,
+        version: 1,
+        type: 'create_entry',
+        flow_id: crypto.randomBytes(16).toString('hex'),
         handler: ['homeassistant', null],
-        data_schema: [
-          { type: 'string', name: 'username', required: true },
-          { type: 'string', name: 'password', required: true },
-        ],
-        errors: {},
+        title: 'Homey',
+        result: code,
+        description: null,
         description_placeholders: null,
-        last_step: null,
-        preview: null,
-        step_id: 'init',
       }));
       return;
     }
