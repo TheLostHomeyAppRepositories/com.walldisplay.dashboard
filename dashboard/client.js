@@ -1442,6 +1442,16 @@
 
     function onDown(e) {
       if (_drag || st) return;
+      // Beruehrungen, die auf einem Bedienelement INNERHALB der Kachel beginnen,
+      // gehoeren diesem und nicht der Kachel. Ohne das startete schon das
+      // Antippen eines Reglers den 400-ms-Zaehler, und wer den Dimmer langsam
+      // und ruhig verschiebt — also keine 10 px in 400 ms —, zog stattdessen die
+      // ganze Kachel weg.
+      // Der Vergleich mit card ist nicht optional: Flow- und Mood-Kacheln SIND
+      // selbst ein <button>. Ohne ihn liessen die sich gar nicht mehr ordnen.
+      var bedienelement = (e.target && e.target.closest)
+        ? e.target.closest('input, button, a, select, textarea') : null;
+      if (bedienelement && bedienelement !== card) return;
       var pt = e.touches ? e.touches[0] : e;
       st = { startX: pt.clientX, startY: pt.clientY };
       st.timer = setTimeout(function () { activateDrag(pt.clientX, pt.clientY); }, 400);
@@ -2210,7 +2220,12 @@
     var hasDim    = capIds.indexOf(CAP.DIM) !== -1;
     var _wc        = _wcControls(capIds);
     var hasWcState = _wc.buttons;
-    var isSpeaker    = d.class === 'speaker' || d.class === 'mediaplayer';
+    // Nicht nur an der Geraeteklasse festmachen: manche Apps melden ihre
+    // Lautsprecher als 'other' oder 'tv', und dann fehlte die Mediensteuerung
+    // trotz vorhandener Faehigkeiten (Rueckmeldung zu einem Sonos). Wer
+    // speaker_playing kann, ist ein Abspielgeraet — unabhaengig von der Klasse.
+    var isSpeaker    = d.class === 'speaker' || d.class === 'mediaplayer'
+      || capIds.indexOf(CAP.SPEAKER_PLAYING) !== -1;
     var isThermostat = capIds.indexOf(CAP.TARGET_TEMP) !== -1;
     var isLock       = d.class === 'lock';
     var isCamera     = d.class === 'camera' || d.class === 'doorbell';
