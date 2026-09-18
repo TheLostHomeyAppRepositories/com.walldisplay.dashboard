@@ -3566,6 +3566,7 @@
                   : document.getElementById('speaker-vol-slider');
       if (other) { other.value = val; other.style.setProperty('--val', val + '%'); }
       this.style.setProperty('--val', val + '%');
+      _showVolume(val);
       // API-Aufruf entprellt (150 ms) — verhindert Flooding
       if (_volDebounce) clearTimeout(_volDebounce);
       _volDebounce = setTimeout(function () { _volSend(val); }, 150);
@@ -3788,6 +3789,7 @@
     var sliderRow = document.getElementById('speaker-vol-slider-row');
     sliderRow.value = vol;
     sliderRow.style.setProperty('--val', vol + '%');
+    _showVolume(vol);
     // Beide Mute-Buttons
     var volIcon = muted ? _SI.volMute : _SI.volHi;
     var muteBtn = document.getElementById('speaker-mute-btn');
@@ -4717,6 +4719,17 @@
     if (cap.min !== undefined && nv < cap.min) nv = cap.min;
     if (cap.max !== undefined && nv > cap.max) nv = cap.max;
     setCapability(_thermostatModalId, CAP.TARGET_TEMP, nv);
+  }
+
+  // Lautstaerke in Prozent an beiden Reglern anzeigen. Bewusst eine Stelle:
+  // sichtbar ist je nach Bildschirmbreite nur eine der beiden Spalten, aber
+  // beide werden gesetzt — sonst zeigt die andere beim Drehen des Geraets
+  // einen veralteten Wert. Schmales Leerzeichen vor dem Prozentzeichen.
+  function _showVolume(val) {
+    ['speaker-vol-value', 'speaker-vol-value-row'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val + ' %';
+    });
   }
 
   function thermostatSetMode(mode) {

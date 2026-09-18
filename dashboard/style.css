@@ -2081,6 +2081,16 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
   padding: 4px 0;
 }
 
+/* Lautstaerke in Prozent ueber dem Regler. tabular-nums haelt die Breite beim
+   Ziehen konstant — sonst zappelt die Zahl zwischen 9 % und 100 %. */
+.speaker-vol-value {
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .speaker-vol-slider {
   writing-mode: vertical-lr;
   direction: rtl;
