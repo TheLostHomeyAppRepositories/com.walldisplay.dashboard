@@ -469,6 +469,24 @@ class ShellyWallDisplayApp extends Homey.App {
         .map((k) => `${k}=${String(req.headers[k]).substring(0, 120)}`)
         .join(' | ');
       this.log(`  ↳ HTTP/${req.httpVersion} von ${req.socket.remoteAddress} — ${kopf}`);
+      // Den Rumpf mitlesen, ohne ihn dem Handler wegzunehmen: 'data' hoert nur
+      // zu. Was der Client hier schickt, ist die einzige offene Frage im
+      // Anmeldeablauf — bisher wissen wir nur, dass es 151 Byte sind.
+      // Passwortartige Felder werden unkenntlich gemacht, es soll nichts
+      // Vertrauliches im Log landen.
+      if (req.method === 'POST') {
+        let mitschnitt = '';
+        req.on('data', (stueck) => {
+          if (mitschnitt.length < 600) mitschnitt += stueck.toString('utf8');
+        });
+        req.on('end', () => {
+          if (!mitschnitt) return;
+          const sauber = mitschnitt
+            .replace(/("(?:password|passwort|secret|token|code)"\s*:\s*")[^"]*/gi, '$1…')
+            .substring(0, 600);
+          this.log(`  ↳ Rumpf (${Buffer.byteLength(mitschnitt)} B): ${sauber}`);
+        });
+      }
       const t0 = Date.now();
       res.once('finish', () => this.log(
         `  ↳ Antwort fertig nach ${Date.now() - t0} ms, ${req.socket.bytesWritten} B auf dem Socket`));
@@ -593,11 +611,10 @@ class ShellyWallDisplayApp extends Homey.App {
 
     // Dieser Endpoint wird vom Shelly Wall Display zur Validierung aufgerufen
     if (url.pathname === '/auth/providers') {
-      res.writeHead(200);
-      res.end(JSON.stringify({
+      this._sendAuthJson(res, {
         providers: [{ name: 'Home Assistant Local', id: null, type: 'homeassistant' }],
         preselect_remember_me: true,
-      }));
+      });
       return;
     }
 
@@ -614,8 +631,7 @@ class ShellyWallDisplayApp extends Homey.App {
       // derselben Lage sofort mit create_entry und liefert den Code mit. Genau
       // das passiert jetzt: der Client kann direkt zu /auth/token weitergehen.
       const code = crypto.randomBytes(16).toString('hex');
-      res.writeHead(200);
-      res.end(JSON.stringify({
+      this._sendAuthJson(res, {
         version: 1,
         type: 'create_entry',
         flow_id: crypto.randomBytes(16).toString('hex'),
@@ -624,30 +640,33 @@ class ShellyWallDisplayApp extends Homey.App {
         result: code,
         description: null,
         description_placeholders: null,
-      }));
+      });
       return;
     }
 
     if (url.pathname.match(/^\/auth\/login_flow\/[^/]+$/) && req.method === 'POST') {
       // Schritt 2: Credentials akzeptieren, Code zurückgeben
       const code = crypto.randomBytes(16).toString('hex');
-      res.writeHead(200);
-      res.end(JSON.stringify({
+      this._sendAuthJson(res, {
+        version: 1,
         type: 'create_entry',
-        result: code,
+        flow_id: crypto.randomBytes(16).toString('hex'),
+        handler: ['homeassistant', null],
         title: 'Homey',
-      }));
+        result: code,
+        description: null,
+        description_placeholders: null,
+      });
       return;
     }
 
     if (url.pathname === '/auth/token' && req.method === 'POST') {
-      res.writeHead(200);
-      res.end(JSON.stringify({
+      this._sendAuthJson(res, {
         access_token: 'homey-token',
         expires_in: 1800,
         refresh_token: 'homey-refresh',
         token_type: 'Bearer',
-      }));
+      });
       return;
     }
 
@@ -2259,6 +2278,32 @@ class ShellyWallDisplayApp extends Homey.App {
     } catch (_) {
       return 'unbekannt';
     }
+  }
+
+  // Ein gemeinsamer Ausgang fuer alle JSON-Antworten unter /auth.
+  //
+  // Bis 1.3.81 gingen sie chunked hinaus, weil keine Laenge gesetzt war. Der
+  // eingebaute Client des Shelly X2i wartete danach exakt neun Sekunden und
+  // legte auf (Issue 20) — das Verhalten eines HTTP-Stacks, der das Chunk-Ende
+  // nicht auswertet und stattdessen auf das Verbindungsende wartet. Bis 1.3.76
+  // kam dieses Ende nach fuenf Sekunden von selbst und der Client meldete einen
+  // Reset; seit keepAliveTimeout 65 s bleibt die Verbindung offen und er laeuft
+  // in sein eigenes Timeout. Derselbe Fehler, zwei Gesichter.
+  //
+  // Ein echtes Home Assistant schickt hier Content-Length, 'application/json'
+  // ohne charset und keine CORS-Header. Genau das wird nachgebildet: die
+  // CORS-Header setzt _handleRequest fuer jede Antwort, unter /auth muessen sie
+  // also wieder weg. Das Dashboard ruft diese Pfade nicht auf, es ist davon
+  // nicht betroffen.
+  _sendAuthJson(res, obj, status) {
+    const rumpf = Buffer.from(JSON.stringify(obj), 'utf8');
+    res.removeHeader('Access-Control-Allow-Origin');
+    res.removeHeader('Access-Control-Allow-Methods');
+    res.removeHeader('Access-Control-Allow-Headers');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Length', rumpf.length);
+    res.writeHead(status || 200);
+    res.end(rumpf);
   }
 
   // Maskiert Text fuer ein HTML-Attribut. redirect_uri ist auf bekannte Schemata
