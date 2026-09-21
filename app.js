@@ -619,27 +619,32 @@ class ShellyWallDisplayApp extends Homey.App {
     }
 
     if (url.pathname === '/auth/login_flow' && req.method === 'POST') {
-      // Frueher kam hier ein Formular zurueck, das Benutzername und Passwort
-      // verlangte — feldgleich mit einem echten Home Assistant. Genau daran
-      // blieb das Wall Display haengen: sein Einrichtungsdialog kennt nur die
-      // Serveradresse, es gibt dort keine Anmeldefelder. Der Log des Melders
-      // zeigt es deutlich — Antwort in 3 ms vollstaendig geschrieben, dann
-      // neun Sekunden Stille, dann legt der Client auf.
+      // Feld fuer Feld und in dieser Reihenfolge an einem echten Home Assistant
+      // gemessen — mit exakt dem Rumpf, den das Wall Display schickt
+      // (client_id, handler, redirect_uri). Ein echtes HA antwortet darauf
+      // IMMER mit einem Formular, nie mit create_entry.
       //
-      // Hier wird ohnehin jede Anmeldung akzeptiert, ein Formular ist also
-      // Theater. Ein echtes Home Assistant mit trusted_networks antwortet in
-      // derselben Lage sofort mit create_entry und liefert den Code mit. Genau
-      // das passiert jetzt: der Client kann direkt zu /auth/token weitergehen.
-      const code = crypto.randomBytes(16).toString('hex');
+      // 1.3.79 hatte hier auf create_entry umgestellt, in der Annahme, der
+      // Einrichtungsdialog des Displays habe keine Anmeldefelder. Das war
+      // falsch: ein Display, das sich ueberhaupt mit einem echten Home
+      // Assistant verbinden kann, muss Anmeldefelder haben — dort kommt immer
+      // dieses Formular. Die Umstellung hat den Fehler nicht behoben, nur eine
+      // zweite Abweichung eingefuehrt. Jetzt wieder das Formular, diesmal aber
+      // mit Content-Length statt chunked; diese Kombination gab es noch nie.
+      const flowId = crypto.randomBytes(16).toString('hex');
       this._sendAuthJson(res, {
-        version: 1,
-        type: 'create_entry',
-        flow_id: crypto.randomBytes(16).toString('hex'),
+        type: 'form',
+        flow_id: flowId,
         handler: ['homeassistant', null],
-        title: 'Homey',
-        result: code,
-        description: null,
+        data_schema: [
+          { type: 'string', name: 'username', required: true },
+          { type: 'string', name: 'password', required: true },
+        ],
+        errors: {},
         description_placeholders: null,
+        last_step: null,
+        preview: null,
+        step_id: 'init',
       });
       return;
     }
