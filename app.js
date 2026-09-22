@@ -102,6 +102,17 @@ class ShellyWallDisplayApp extends Homey.App {
       }
     }
 
+    // Letztes Auffangnetz. Der Anfrage-Handler hat seinen eigenen Fangzweig,
+    // aber auch ein Zeitgeber oder ein Ereignis-Rueckruf kann eine Zusage
+    // ablehnen, die niemand abfaengt — und das beendet seit Node 15 den ganzen
+    // Prozess. Fuer ein Wanddisplay, das rund um die Uhr laeuft, ist eine Zeile
+    // im Log allemal besser als ein Neustart mitten im Betrieb. Bewusst nur
+    // unhandledRejection: ein uncaughtException hinterlaesst moeglicherweise
+    // einen unbrauchbaren Zustand, den zu verschweigen schlimmer waere.
+    process.on('unhandledRejection', (grund) => {
+      this.error('Unbehandelte Ablehnung:', (grund && grund.message) || grund);
+    });
+
     await this._initHomeyApi();
 
     const port = this.homey.settings.get('port') || DEFAULT_PORT;
@@ -387,7 +398,26 @@ class ShellyWallDisplayApp extends Homey.App {
   }
 
   async _startServer(port) {
-    this.server = http.createServer((req, res) => this._handleRequest(req, res));
+    // _handleRequest ist async, und seine Zusage wurde bisher weggeworfen. Ein
+    // einziger Fehler in einer einzigen Anfrage wurde damit zu einer
+    // unbehandelten Ablehnung — und die beendet seit Node 15 den Prozess. Homey
+    // startet die App dann neu; ein Display, das genau in diesem Fenster neu
+    // laedt, bekommt ERR_CONNECTION_ABORTED und bleibt auf der Fehlerseite
+    // stehen, bis jemand von Hand neu laedt. Genau das wurde gemeldet.
+    this.server = http.createServer((req, res) => {
+      this._handleRequest(req, res).catch((e) => {
+        this.error(`Fehler bei ${req.method} ${req.url}:`, (e && e.message) || e);
+        // Sind die Header schon draussen, laesst sich nichts mehr sagen — dann
+        // nur noch die Verbindung schliessen, statt beim Versuch zu scheitern.
+        if (res.headersSent) { res.destroy(); return; }
+        try {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Internal Server Error');
+        } catch (_) {
+          res.destroy();
+        }
+      });
+    });
     // Node schliesst untaetige Keep-Alive-Verbindungen nach 5 s. Ein Client, der
     // die Verbindung genau in dem Moment wiederverwendet, bekommt ein RST — im
     // Browser net::ERR_CONNECTION_RESET, im Android-WebView ERROR_CONNECT (-6).
