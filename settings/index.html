@@ -666,6 +666,16 @@
       <div class="status" id="port-status"></div>
     </div>
 
+    <!-- Server-Adresse -->
+    <div class="card">
+      <div class="card-title" data-i18n="hostTitle">Server Address</div>
+      <label for="host-input" data-i18n="hostLabel">IP address of this Homey (empty = detect automatically)</label>
+      <input type="text" id="host-input" placeholder="e.g. 192.168.1.68" inputmode="decimal">
+      <p class="hint" data-i18n="hostHint">Only needed if the Homey has more than one network connection. With both cable and Wi-Fi, the cable address is used automatically — enter an address here to override that.</p>
+      <button class="save-btn" onclick="saveHost()" data-i18n="save">Save</button>
+      <div class="status" id="host-status"></div>
+    </div>
+
     <!-- Alarm PIN -->
     <div class="card">
       <div class="card-title" data-i18n="pinTitle">Alarm PIN</div>
@@ -1324,6 +1334,13 @@
         save:             'Save',
         invalidPort:      'Invalid port (1024–65535)',
         portSaved:        'Saved. Server is restarting…',
+        hostTitle:        'Server Address',
+        hostLabel:        'IP address of this Homey (empty = detect automatically)',
+        hostHint:         'Only needed if the Homey has more than one network connection. With both cable and Wi-Fi, '
+                          + 'the cable address is used automatically — enter an address here to override that.',
+        hostInvalid:      'Please enter a valid IPv4 address, e.g. 192.168.1.68',
+        hostSaved:        'Address saved',
+        hostCleared:      'Cleared — detecting automatically again',
         tileSizeTitle:    'Tile Width',
         tileSizeHint:     'Adjusts device tile width on the dashboard. Default: M',
         tileSizeSaved:    'Width saved',
@@ -1585,6 +1602,13 @@
         save:             'Speichern',
         invalidPort:      'Ungültiger Port (1024–65535)',
         portSaved:        'Gespeichert. Server wird neu gestartet…',
+        hostTitle:        'Server-Adresse',
+        hostLabel:        'IP-Adresse dieser Homey (leer = automatisch erkennen)',
+        hostHint:         'Nur nötig, wenn die Homey mehr als eine Netzwerkverbindung hat. Bei Kabel und WLAN wird '
+                          + 'automatisch die Kabel-Adresse verwendet — hier lässt sich das überschreiben.',
+        hostInvalid:      'Bitte eine gültige IPv4-Adresse eingeben, z. B. 192.168.1.68',
+        hostSaved:        'Adresse gespeichert',
+        hostCleared:      'Gelöscht — wird wieder automatisch erkannt',
         tileSizeTitle:    'Kachelbreite',
         tileSizeHint:     'Passt die Breite der Gerätekacheln an. Standard: M',
         tileSizeSaved:    'Breite gespeichert',
@@ -2184,6 +2208,7 @@
 
     async function loadAll() {
       var port           = await hGetSafe('port', 7575);
+      var savedHost      = await hGetSafe('serverHost', '');
       var storedUrl      = await hGetSafe('currentUrl', null);
       var enabledFlows    = await hGetSafe('enabledFlows', null);
       var enabledMoods    = await hGetSafe('enabledMoods', null);
@@ -2237,6 +2262,7 @@
 
       // ── General tab values ─────────────────────────────────────────
       document.getElementById('port-input').value = port;
+      document.getElementById('host-input').value = savedHost || '';
       document.getElementById('pin-input').value  = savedPin;
       document.getElementById('pat-input').value  = savedPat;
       document.getElementById('dashboard-title-input').value = savedDashboardTitle;
@@ -2417,6 +2443,19 @@
         showStatus('port-status', T.portSaved, true);
         setTimeout(loadAll, 3000);
       } catch (e) { showStatus('port-status', T.errorPrefix + e.message, false); }
+    }
+
+    async function saveHost() {
+      var host = document.getElementById('host-input').value.trim();
+      // Leer ist gueltig und bedeutet "wieder automatisch erkennen".
+      if (host && !/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(host)) {
+        showStatus('host-status', T.hostInvalid, false); return;
+      }
+      try {
+        await hSet('serverHost', host);
+        showStatus('host-status', host ? T.hostSaved : T.hostCleared, true);
+        setTimeout(loadAll, 2000);
+      } catch (e) { showStatus('host-status', T.errorPrefix + e.message, false); }
     }
 
     async function savePin() {

@@ -2795,24 +2795,41 @@ class ShellyWallDisplayApp extends Homey.App {
 
   // Gibt die LAN-IP der Homey zurück (bevorzugt 10.x / 192.168.x, überspringt Loopback + Docker)
   _getLanIP() {
-    const ifaces = os.networkInterfaces();
-    const candidates = [];
+    // Hat jemand eine Adresse von Hand eingetragen, gilt die. Das ist der
+    // Ausweg fuer Aufbauten, die keine Regel richtig trifft.
+    const manuell = (this.homey.settings.get('serverHost') || '').trim();
+    if (manuell) return manuell;
 
+    // Eine Homey mit Kabel UND WLAN hat zwei Adressen. Frueher sammelte diese
+    // Funktion beide ein und schob jede neue per unshift nach vorne — es gewann
+    // also die zuletzt aufgezaehlte Schnittstelle, und in welcher Reihenfolge
+    // das Betriebssystem sie nennt, ist willkuerlich. Ein Melder bekam so
+    // dauerhaft die WLAN-Adresse, obwohl sein Kabel die feste war.
+    //
+    // Kabel schlaegt jetzt WLAN: es ist die stabilere Verbindung, und wer
+    // beides angeschlossen hat, meint in aller Regel das Kabel.
+    const rang = (name) => {
+      if (/^(eth|en|end|enp|eno)/i.test(name)) return 0;   // Kabel
+      if (/^(wlan|wl|wlp|wifi|wlx)/i.test(name)) return 2; // WLAN
+      return 1;                                            // alles andere
+    };
+
+    const kandidaten = [];
+    const ifaces = os.networkInterfaces();
     for (const name of Object.keys(ifaces)) {
       for (const iface of ifaces[name]) {
         if (iface.family !== 'IPv4' || iface.internal) continue;
         const ip = iface.address;
-        // Bevorzuge typische Heimnetz-Ranges
-        if (ip.startsWith('10.') || ip.startsWith('192.168.')) {
-          candidates.unshift(ip); // nach vorne
-        } else if (!ip.startsWith('172.')) {
-          candidates.push(ip);
-        }
-        // 172.x.x.x (Docker-Bridge) wird übersprungen
+        // 172.x.x.x ist ueblicherweise eine Docker-Bruecke und nie gemeint.
+        if (ip.startsWith('172.')) continue;
+        const privat = ip.startsWith('10.') || ip.startsWith('192.168.');
+        kandidaten.push({ ip, rang: rang(name), privat: privat ? 0 : 1 });
       }
     }
 
-    return candidates[0] || null;
+    // Erst Schnittstellenart, dann Heimnetz vor allem anderen.
+    kandidaten.sort((a, b) => (a.rang - b.rang) || (a.privat - b.privat));
+    return kandidaten.length ? kandidaten[0].ip : null;
   }
 
   // ── Homey Settings-page API (works via cloud relay too) ─────────────

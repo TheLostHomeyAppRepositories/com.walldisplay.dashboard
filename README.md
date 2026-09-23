@@ -160,6 +160,18 @@ Homey App (com.walldisplay.dashboard)
 4. On your Shelly Wall Display: **Settings → Network → Home Assistant → Add URL** and enter the URL.
 5. The display connects automatically and loads the dashboard.
 
+> **Do not use the Home Assistant companion app** from the display's app store. Use the built-in
+> **Network → Home Assistant** connection above, or simply open the URL in any browser.
+>
+> The companion app expects a complete Home Assistant behind it — the `mobile_app` integration,
+> real entity states over its own websocket, the Home Assistant interface itself. This app provides
+> a dashboard, not a home automation platform, so the companion app either refuses to finish setting
+> up or ends up showing an empty house. If it is already installed, remove it: it can take over the
+> connection and make the working route look broken.
+>
+> If the Homey has **both cable and Wi-Fi** connected, it has two addresses. The app prefers the
+> cable address; if you need a specific one, enter it under **Settings → General → Server Address**.
+
 ---
 
 ## Settings
