@@ -18,6 +18,7 @@ The app runs a local HTTP/WebSocket server on your Homey that emulates the Home 
 - **PIN protection** — optional 4-digit PIN for the home alarm, configurable in the settings page
 - **Camera & doorbell snapshots** — tap a camera or doorbell tile to view the latest image with auto-refresh
 - **External sensors** — reed contacts and similar sensors (e.g. garage door) shown as Open / Closed; tile turns red when open
+- **Media players** — speakers and media players open their own window with cover art, track and artist, transport controls, shuffle and repeat, and a volume slider showing the level as a percentage. A device is recognised by its playback capability, not only by its device class, so speakers reported under an unusual class still get the full controls
 - **Sensor readings** — temperature, humidity, CO₂, and power consumption shown inline on each tile
 
 ### Flow Buttons & Flow Action Cards
@@ -100,6 +101,7 @@ The app runs a local HTTP/WebSocket server on your Homey that emulates the Home 
 - **Cached lists** — flow and mood lists are held in memory and refreshed only when they actually change in Homey, rather than being re-fetched on every redraw
 - **Self-healing icon cache** — if browser storage fills up, the oldest cached icons are dropped and the write is retried, instead of silently re-downloading every icon on every load
 - **XHR timeout** — all requests time out after 10 seconds to prevent a frozen UI
+- **A failed request cannot take the app down** — errors are caught per request and answered with a 500 instead of ending the process; background tasks have a safety net too. Without this, a single failure restarts the app, and a display reloading in that window lands on a connection error and stays there
 
 ---
 
@@ -184,6 +186,7 @@ The settings page is organised into four tabs:
 |---|---|---|
 | **Dashboard URL** | Clickable link to the dashboard — also works in any browser | Auto-detected |
 | **Port** | HTTP server port (1024–65535). Server restarts automatically when changed. | `7575` |
+| **Server Address** | IP address used for the dashboard URL. Only needed when the Homey has more than one network connection — with cable and Wi-Fi both connected it has two addresses, and the cable one is preferred automatically. Enter an address to override; leave empty to keep detecting. | Auto-detected |
 | **Alarm PIN** | Optional 4-digit PIN to arm/disarm the alarm from the dashboard. Leave empty to disable. | — |
 | **Flow Confirmation** | Show a confirmation dialog before triggering a flow | Disabled |
 | **Homey API Token** | Personal Access Token required to trigger flows (**Homey Pro 2023 or later only**). Create at **my.homey.app → Account → Developer → API Keys**. | — |
@@ -209,6 +212,9 @@ The settings page is organised into four tabs:
 | **Dashboard Language** | **Auto** (browser language) / **English** / **Deutsch**. The Shelly Wall Display always reports English, so pick the language explicitly there. | Auto |
 | **Power on tiles** | Show the current wattage on device tiles that report it. The Energy dashboard always shows every value regardless. | Enabled |
 | **Blind controls** | For blinds that report both a position slider and up/down/stop: **Slider** / **Buttons** / **Both**. Blinds that only support up/down/stop always show the buttons. | Slider |
+| **Animations** | **Off** — no transitions, best on slow panels. **Default** / **Lively** — increasing amounts of motion | Default |
+| **Header Icons** | **Emoji** — classic emoji. **SVG** — line icons that adapt to any colour scheme | SVG |
+| **Music Player Cover Fullscreen** | Show the album art fullscreen while a speaker is playing, after a configurable delay in seconds | Enabled / 20 s |
 | **Font Size** | Text size on device and flow tiles (1–5) | 1 |
 | **Tile Width** | Width of device tiles: XS / S / M / L / XL | M |
 | **Tile Height** | **Auto** — height follows content. **Same as width** — sets a minimum height matching the configured tile width; tiles stretch to fill the row, so they will not always come out exactly square. **Fit to screen** — tile height shrinks until everything fits without scrolling; readings and status are dropped first and long names shortened, so the name never disappears. With very many devices the tiles reach their minimum and the page scrolls again. **2 × 2** — two columns and a tile height that makes two rows exactly fill the screen: four large tiles per page, further devices below. The only mode that overrides the tile width. | Auto |
