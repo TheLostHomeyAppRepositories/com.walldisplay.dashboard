@@ -18,6 +18,7 @@
     MEASURE_BATTERY: 'measure_battery',
     WC_SET:          'windowcoverings_set',
     WC_STATE:        'windowcoverings_state',
+    GARAGE_CLOSED:   'garagedoor_closed',
     HOMEALARM_STATE: 'homealarm_state',
     HOMEALARM:       'homealarm',
     SPEAKER_PLAYING: 'speaker_playing',
@@ -2228,6 +2229,12 @@
       || capIds.indexOf(CAP.SPEAKER_PLAYING) !== -1;
     var isThermostat = capIds.indexOf(CAP.TARGET_TEMP) !== -1;
     var isLock       = d.class === 'lock';
+    // Garagentor: garagedoor_closed ist true, wenn das Tor ZU ist. Offen ist
+    // der bemerkenswerte Zustand, deshalb faerbt sich die Kachel dann ein —
+    // wie bei einer hochgefahrenen Jalousie.
+    var _garageCapId = _findCapId(capIds, CAP.GARAGE_CLOSED);
+    var _garageCap   = _garageCapId ? caps[_garageCapId] : null;
+    var isGarageOpen = !!_garageCap && _garageCap.value === false;
     var isCamera     = d.class === 'camera' || d.class === 'doorbell';
     // Licht mit mehr als Ein/Aus — Helligkeit, Farbe oder Farbtemperatur.
     // Solche Lampen bekommen ein eigenes Fenster, wie das Thermostat.
@@ -2251,6 +2258,7 @@
 
     if (isOn || isArmed || isLocked) card.classList.add('on');
     if (wcState === 'up') card.classList.add('on');
+    if (isGarageOpen) card.classList.add('on');
     if (caps[CAP.INPUT_EXT_1] && caps[CAP.INPUT_EXT_1].value === true) card.classList.add('open');
     if (hasOnOff || hasDim || hasAlarm || hasWcState || isLock) card.classList.add('is-switchable');
 
@@ -2369,6 +2377,26 @@
       header.appendChild(toggle);
     }
 
+    // Garagentor-Schalter. setable wird respektiert: meldet das Geraet die
+    // Faehigkeit als nur lesbar, bleibt es bei der Anzeige ohne Bedienung.
+    if (_garageCap && _garageCap.setable !== false) {
+      var gToggle = createElement('button', 'device-toggle');
+      // Kennzeichnen wie beim Alarmschalter: updateCard fasst sonst jeden
+      // .device-toggle an und wuerde ihn nach dem onoff-Zustand ausschalten.
+      gToggle.setAttribute('data-garage', 'true');
+      if (isGarageOpen) gToggle.classList.add('on');
+      gToggle.setAttribute('aria-label', isGarageOpen ? T.closed : T.open);
+      (function (deviceId, capId, btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          // Der Schalter zeigt "an" fuer offen; garagedoor_closed ist genau
+          // umgekehrt. Steht er auf offen, soll der Klick schliessen.
+          setCapability(deviceId, capId, btn.classList.contains('on'));
+        });
+      }(d.id, _garageCapId, gToggle));
+      header.appendChild(gToggle);
+    }
+
     if (hasButton) {
       var btnTrigger = createElement('button', 'device-btn-trigger');
       btnTrigger.setAttribute('aria-label', T.trigger);
@@ -2413,6 +2441,7 @@
     statusEl.id = 'status-' + d.id;
     statusEl.textContent = buildStatusText(d);
     card.appendChild(statusEl);
+    _dedupeStatus(card, statusEl);
 
     var name = createElement('div', 'device-name');
     name.textContent = d.name;
@@ -2433,6 +2462,11 @@
     if (d.class === 'lock') {
       var lkLocked = caps[CAP.LOCKED] && caps[CAP.LOCKED].value === true;
       return lkLocked ? T.locked : T.unlocked;
+    }
+
+    var gCapId = _findCapId(capIds, CAP.GARAGE_CLOSED);
+    if (gCapId && caps[gCapId]) {
+      return caps[gCapId].value === false ? T.open : T.closed;
     }
 
     if (d.class === 'speaker' || d.class === 'mediaplayer') {
@@ -2528,6 +2562,35 @@
   // geaendert, erschiene der Wert beim ersten Zeichnen und bliebe dann stehen.
   //
   // null bedeutet: nicht anzeigbar.
+  // Eine Faehigkeit finden, auch wenn sie als Unterfaehigkeit gefuehrt wird.
+  // Advanced Virtual Devices nennen ihre Faehigkeiten etwa
+  // "garagedoor_closed.button1" — ein exakter Vergleich geht daran vorbei.
+  // Der Statustext soll nicht wiederholen, was ohnehin schon auf der Kachel
+  // steht. Beim Garagentor eines Melders stand "Geschlossen" zweimal
+  // untereinander: einmal als Wert aus seiner eigenen Textfaehigkeit, einmal
+  // als Status. Verglichen wird nur auf Gleichheit — "Heizt" neben "22 °C"
+  // bleibt also unberuehrt.
+  function _dedupeStatus(card, statusEl) {
+    if (!card || !statusEl) return;
+    var txt = (statusEl.textContent || '').trim();
+    if (!txt) return;
+    var werte = card.querySelectorAll('.device-value');
+    for (var i = 0; i < werte.length; i++) {
+      if ((werte[i].textContent || '').trim() === txt) {
+        statusEl.textContent = '';
+        return;
+      }
+    }
+  }
+
+  function _findCapId(capIds, basis) {
+    if (capIds.indexOf(basis) !== -1) return basis;
+    for (var i = 0; i < capIds.length; i++) {
+      if (capIds[i].indexOf(basis + '.') === 0) return capIds[i];
+    }
+    return null;
+  }
+
   function _formatCapValue(fcap) {
     if (!fcap || fcap.value === null || fcap.value === undefined) return null;
     var einheit = fcap.units || '';
@@ -2813,17 +2876,26 @@
     var wcStateVal = hasWcState && caps[CAP.WC_STATE] ? caps[CAP.WC_STATE].value : null;
     var isLockU    = d.class === 'lock';
     var isLockedU  = isLockU && caps[CAP.LOCKED] && caps[CAP.LOCKED].value === true;
+    var gCapIdU    = _findCapId(capIds, CAP.GARAGE_CLOSED);
+    var isGarageOpenU = !!gCapIdU && caps[gCapIdU] && caps[gCapIdU].value === false;
 
-    if (isOn || isArmed || wcStateVal === 'up' || isLockedU) card.classList.add('on');
+    if (isOn || isArmed || wcStateVal === 'up' || isLockedU || isGarageOpenU) card.classList.add('on');
     else card.classList.remove('on');
 
     if (caps[CAP.INPUT_EXT_1] && caps[CAP.INPUT_EXT_1].value === true) card.classList.add('open');
     else card.classList.remove('open');
 
-    var toggle = card.querySelector('.device-toggle:not([data-alarm])');
+    var toggle = card.querySelector('.device-toggle:not([data-alarm]):not([data-garage])');
     if (toggle) {
       if (isOn) toggle.classList.add('on');
       else toggle.classList.remove('on');
+    }
+
+    var garageToggle = card.querySelector('.device-toggle[data-garage]');
+    if (garageToggle) {
+      if (isGarageOpenU) garageToggle.classList.add('on');
+      else garageToggle.classList.remove('on');
+      garageToggle.setAttribute('aria-label', isGarageOpenU ? T.closed : T.open);
     }
 
     var alarmToggle = card.querySelector('.device-toggle[data-alarm]');
@@ -2925,6 +2997,10 @@
         if (sib3) sib3.textContent = caps[CAP.INPUT_EXT_1].value ? ' ' + T.open : ' ' + T.closed;
       }
     }
+
+    // Zum Schluss, wenn alle Werte frisch sind: doppelte Statuszeile entfernen.
+    // Frueher im Ablauf wuerde gegen veraltete Werte verglichen.
+    _dedupeStatus(card, statusEl);
   }
 
   // ── #12 Server-Sent Events mit Exponential Backoff ──
