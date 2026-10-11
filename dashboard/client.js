@@ -2518,6 +2518,49 @@
     } catch (e) { return null; }
   }
 
+  // Einen Faehigkeitswert fuer die Kachel formatieren. Zahlen wie bisher, Text
+  // jetzt ebenfalls: Textfaehigkeiten — etwa eine Windrichtung "ESE" aus einem
+  // Advanced Virtual Device — wurden stillschweigend uebersprungen, und die
+  // Kachel blieb leer, obwohl Homey den Wert anzeigt.
+  //
+  // Bewusst eine gemeinsame Stelle: der Aufbau der Kachel und die laufende
+  // Aktualisierung hatten denselben Filter doppelt. Haette ich nur einen
+  // geaendert, erschiene der Wert beim ersten Zeichnen und bliebe dann stehen.
+  //
+  // null bedeutet: nicht anzeigbar.
+  function _formatCapValue(fcap) {
+    if (!fcap || fcap.value === null || fcap.value === undefined) return null;
+    var einheit = fcap.units || '';
+
+    if (typeof fcap.value === 'number') {
+      var zahl = Math.abs(fcap.value) < 10
+        ? parseFloat(fcap.value.toFixed(2))
+        : Math.round(fcap.value);
+      return zahl + (einheit ? ' ' + einheit : '');
+    }
+
+    if (typeof fcap.value === 'string') {
+      var txt = fcap.value.trim();
+      if (!txt) return null;
+      // Bei einer Auswahlliste den lesbaren Titel zeigen statt der Kennung.
+      if (fcap.values && fcap.values.length) {
+        for (var i = 0; i < fcap.values.length; i++) {
+          if (fcap.values[i].id !== fcap.value) continue;
+          var t = fcap.values[i].title;
+          if (t && typeof t === 'object') txt = t[lang] || t.en || txt;
+          else if (t) txt = t;
+          break;
+        }
+      }
+      // Lange Texte sprengen die Kachel. Kuerzen statt weglassen — sonst waere
+      // sie wieder leer, und genau das war der Fehler.
+      if (txt.length > 20) txt = txt.slice(0, 19) + '…';
+      return txt + (einheit ? ' ' + einheit : '');
+    }
+
+    return null;
+  }
+
   function buildValueElements(d) {
     var caps      = d.capabilitiesObj || {};
     var capIds    = d.capabilities    || [];
@@ -2718,13 +2761,11 @@
         if (fid.indexOf('debug') !== -1 || fid.indexOf('timeline') !== -1) continue;
         if (fid.indexOf('button_') === 0) continue;
         var fcap = caps[fid];
-        if (!fcap || typeof fcap.value !== 'number' || fcap.value === null) continue;
-        var fval  = fcap.value;
-        var funit = fcap.units || '';
-        var fstr  = Math.abs(fval) < 10 ? parseFloat(fval.toFixed(2)) : Math.round(fval);
-        var fel   = createElement('div', 'device-value' + (fbCount === 0 ? ' primary' : ''));
+        var fstr = _formatCapValue(fcap);
+        if (fstr === null) continue;
+        var fel = createElement('div', 'device-value' + (fbCount === 0 ? ' primary' : ''));
         fel.setAttribute('data-capid', fid);
-        fel.textContent = fstr + (funit ? ' ' + funit : '');
+        fel.textContent = fstr;
         container.appendChild(fel);
         added++;
         fbCount++;
@@ -2805,18 +2846,19 @@
     card.querySelectorAll('[data-capid]').forEach(function (el) {
       var cid  = el.getAttribute('data-capid');
       var fcap = caps[cid];
-      if (!fcap || typeof fcap.value !== 'number') return;
-      var fval  = fcap.value;
-      var funit = fcap.units || '';
       if (cid === 'current_quarter_price') {
-        el.textContent = parseFloat(fval.toFixed(4)) + (funit ? ' ' + funit : '');
+        // Der Preis hat seine eigene Genauigkeit und Farbgebung.
+        if (!fcap || typeof fcap.value !== 'number') return;
+        var funit = fcap.units || '';
+        el.textContent = parseFloat(fcap.value.toFixed(4)) + (funit ? ' ' + funit : '');
         el.classList.remove('price-green', 'price-yellow', 'price-red');
         var cls = _energyPriceColorClass(d);
         if (cls) el.classList.add(cls);
-      } else {
-        el.textContent = (Math.abs(fval) < 10 ? parseFloat(fval.toFixed(2)) : Math.round(fval)) +
-          (funit ? ' ' + funit : '');
+        return;
       }
+      var neu = _formatCapValue(fcap);
+      if (neu === null) return;
+      el.textContent = neu;
     });
 
     var sliders = card.querySelectorAll('.dim-slider');
