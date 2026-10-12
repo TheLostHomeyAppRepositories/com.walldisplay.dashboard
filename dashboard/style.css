@@ -483,6 +483,21 @@ body.fit-tiles .device-card {
   min-height: 0;
 }
 
+/* Bei fester Hoehe darf der Inhalt den Namen nicht nach unten aus der Kachel
+   schieben — eine Kachel ohne Namen ist unbrauchbar (siehe .fit-compact
+   weiter unten, das denselben Zweck eine Stufe spaeter verfolgt). Flex-Kinder
+   schrumpfen von sich aus nicht unter ihren Inhalt; 'min-height: 0' hebt das
+   fuer den Werteblock auf, 'flex-shrink: 0' haelt Name und Status fest.
+   Gekuerzt wird damit der Werteblock, und zwar von unten. */
+body.fit-tiles .device-values {
+  min-height: 0;
+  overflow: hidden;
+}
+body.fit-tiles .device-name,
+body.fit-tiles .device-status {
+  flex-shrink: 0;
+}
+
 /* Aufteilung 2 x 2: die Spaltenzahl wird hier fest vorgegeben statt aus der
    Kachelbreite abgeleitet — genau das ist der Zweck dieser Einstellung. */
 body.fit-2x2 .device-grid {
@@ -636,6 +651,31 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
 @media (hover: hover) {
   .wc-btn:hover { background: rgba(0,0,0,0.10); color: var(--text-primary, #333); }
   .wc-btn.active:hover { background: var(--accent); color: #fff; }
+}
+
+/* ── Auswahlliste (setzbare Aufzaehlung, z.B. Ein/Aus/Auto) ── */
+/* Gleiche Optik wie die Fahrtasten, aber mit Wortbeschriftungen: deshalb
+   umbrechend statt gestaucht — bei 130 px Kachelbreite bleiben drei
+   Moeglichkeiten sonst unlesbar. Eigene Reihen-Klasse, damit _wcHighlight
+   diese Reihe nicht erwischt. */
+.enum-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.enum-btn {
+  flex: 1 1 auto;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .device-icon {

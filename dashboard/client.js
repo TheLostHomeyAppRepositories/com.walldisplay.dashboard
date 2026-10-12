@@ -2591,14 +2591,60 @@
     return null;
   }
 
+  // Beschriftung einer Auswahlmoeglichkeit in der eingestellten Sprache.
+  function _enumLabel(wert) {
+    var t = wert && wert.title;
+    if (t && typeof t === 'object') return t[lang] || t.en || wert.id;
+    return t || wert.id;
+  }
+
+  // Eine setzbare Aufzaehlung finden, die noch niemand sonst behandelt.
+  // Advanced Virtual Devices bieten eigene Auswahllisten an (etwa Ein/Aus/Auto
+  // fuer eine Klimazone); die standen bisher nur als Text auf der Kachel, ohne
+  // Moeglichkeit sie zu aendern.
+  var _ENUM_BELEGT = ['thermostat_mode', 'homealarm_state', 'windowcoverings_state',
+                      'speaker_repeat', 'light_mode'];
+  // Hoechstens drei Reihen: ein Geraet mit zehn Auswahllisten wuerde die
+  // Kachel auf Bildschirmhoehe treiben, und im Gitter zieht eine hohe Kachel
+  // ihre ganze Zeile mit. Was darueber liegt, erscheint wie bisher als Text.
+  // Mehr als sechs Moeglichkeiten ebenso: eine Reihe aus zwanzig Knoepfen ist
+  // keine Bedienung mehr.
+  var _ENUM_MAX_REIHEN = 3;
+  var _ENUM_MAX_WERTE  = 6;
+  function _findPicklists(capIds, caps) {
+    var treffer = [];
+    for (var i = 0; i < capIds.length && treffer.length < _ENUM_MAX_REIHEN; i++) {
+      var id = capIds[i];
+      var basis = id.split('.')[0];
+      if (_ENUM_BELEGT.indexOf(basis) !== -1) continue;
+      var c = caps[id];
+      if (!c || c.setable === false) continue;
+      if (!c.values || !c.values.length || c.values.length > _ENUM_MAX_WERTE) continue;
+      if (c.type && c.type !== 'enum') continue;
+      treffer.push({ id: id, cap: c });
+    }
+    return treffer;
+  }
+
   function _formatCapValue(fcap) {
     if (!fcap || fcap.value === null || fcap.value === undefined) return null;
     var einheit = fcap.units || '';
 
     if (typeof fcap.value === 'number') {
-      var zahl = Math.abs(fcap.value) < 10
-        ? parseFloat(fcap.value.toFixed(2))
-        : Math.round(fcap.value);
+      // decimals des Geraets beachten, aber als OBERGRENZE, nicht als Vorgabe:
+      // parseFloat schneidet nachlaufende Nullen ab. Ein Geraet mit
+      // decimals: 2 und Wert 1119 zeigt also weiterhin "1119" und nicht
+      // "1119.00" — ein AVD mit decimals: 1 und 20.6 aber endlich "20.6"
+      // statt der gerundeten 21.
+      // Fehlt die Angabe, bleibt es exakt bei der bisherigen Regel.
+      var zahl;
+      if (typeof fcap.decimals === 'number' && fcap.decimals >= 0 && fcap.decimals <= 6) {
+        zahl = parseFloat(fcap.value.toFixed(fcap.decimals));
+      } else {
+        zahl = Math.abs(fcap.value) < 10
+          ? parseFloat(fcap.value.toFixed(2))
+          : Math.round(fcap.value);
+      }
       return zahl + (einheit ? ' ' + einheit : '');
     }
 
@@ -2609,9 +2655,7 @@
       if (fcap.values && fcap.values.length) {
         for (var i = 0; i < fcap.values.length; i++) {
           if (fcap.values[i].id !== fcap.value) continue;
-          var t = fcap.values[i].title;
-          if (t && typeof t === 'object') txt = t[lang] || t.en || txt;
-          else if (t) txt = t;
+          txt = _enumLabel(fcap.values[i]);
           break;
         }
       }
@@ -2803,6 +2847,12 @@
       }
     }
 
+    // Auswahlliste: erst suchen, aufgebaut wird sie nach den Textwerten.
+    // Sie zaehlt absichtlich nicht als Wert, damit der Rueckfall darunter
+    // weiterhin laeuft — sonst verschwinden auf so einer Kachel alle Zahlen.
+    var _picks = _findPicklists(capIds, caps);
+    var _pickIds = _picks.map(function (p) { return p.id; });
+
     // Fallback für Custom-Capabilities (z.B. current_quarter_price, solar_forecast_power)
     var _fbExcludeClasses = ['speaker', 'mediaplayer', 'homealarm', 'lock', 'light', 'socket'];
     if (added === 0 && _fbExcludeClasses.indexOf(d.class) === -1) {
@@ -2819,6 +2869,7 @@
       for (var fi = 0; fi < fbCapIds.length && fbCount < 2; fi++) {
         var fid = fbCapIds[fi];
         if (fbSkip.indexOf(fid) !== -1) continue;
+        if (_pickIds.indexOf(fid) !== -1) continue;
         if (fid.indexOf('_json') !== -1) continue;
         if (fid.indexOf('_hour_') !== -1 || fid.indexOf('_tomorrow_') !== -1) continue;
         if (fid.indexOf('debug') !== -1 || fid.indexOf('timeline') !== -1) continue;
@@ -2834,6 +2885,32 @@
         fbCount++;
       }
     }
+
+    // Auswahlliste als Knopfreihe, unterhalb der Werte. Die Optik ist die der
+    // Storen-Tasten, damit nichts Neues gelernt werden muss. Eigene
+    // Reihen-Klasse: _wcHighlight greift auf die erste '.wc-btn-row' einer
+    // Karte zu und wuerde die Markierung hier sonst wieder abraeumen.
+    _picks.forEach(function (pick) {
+      var pickRow = createElement('div', 'enum-btn-row');
+      pickRow.setAttribute('data-enum-cap', pick.id);
+      pick.cap.values.forEach(function (wert) {
+        var b = createElement('button', 'wc-btn enum-btn');
+        b.textContent = _enumLabel(wert);
+        b.setAttribute('data-enum', wert.id);
+        if (wert.id === pick.cap.value) b.classList.add('active');
+        (function (deviceId, capId, optionId) {
+          b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // setCapability schreibt den Wert sofort mit und ruft updateCard —
+            // dort sitzt die Markierung, hier wird nichts von Hand gesetzt.
+            setCapability(deviceId, capId, optionId);
+          });
+        }(d.id, pick.id, wert.id));
+        pickRow.appendChild(b);
+      });
+      container.appendChild(pickRow);
+      added++;
+    });
 
     return added > 0 ? container : null;
   }
@@ -2997,6 +3074,16 @@
         if (sib3) sib3.textContent = caps[CAP.INPUT_EXT_1].value ? ' ' + T.open : ' ' + T.closed;
       }
     }
+
+    // Auswahlliste: Markierung dem gemeldeten Wert nachziehen. Greift auch
+    // dann, wenn der Wert aus einem Flow oder von der Homey-App kommt.
+    Array.prototype.forEach.call(card.querySelectorAll('.enum-btn-row'), function (reihe) {
+      var eCap = caps[reihe.getAttribute('data-enum-cap')];
+      var eVal = eCap ? eCap.value : null;
+      Array.prototype.forEach.call(reihe.querySelectorAll('.enum-btn'), function (b) {
+        b.classList.toggle('active', b.getAttribute('data-enum') === eVal);
+      });
+    });
 
     // Zum Schluss, wenn alle Werte frisch sind: doppelte Statuszeile entfernen.
     // Frueher im Ablauf wuerde gegen veraltete Werte verglichen.

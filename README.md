@@ -19,7 +19,8 @@ The app runs a local HTTP/WebSocket server on your Homey that emulates the Home 
 - **Camera & doorbell snapshots** — tap a camera or doorbell tile to view the latest image with auto-refresh
 - **External sensors** — reed contacts and similar sensors (e.g. garage door) shown as Open / Closed; tile turns red when open
 - **Media players** — speakers and media players open their own window with cover art, track and artist, transport controls, shuffle and repeat, and a volume slider showing the level as a percentage. A device is recognised by its playback capability, not only by its device class, so speakers reported under an unusual class still get the full controls
-- **Sensor readings** — temperature, humidity, CO₂, and power consumption shown inline on each tile
+- **Sensor readings** — temperature, humidity, CO₂, and power consumption shown inline on each tile. Other capabilities are shown as text, following the number of decimal places configured on the device (a value set to one decimal place is no longer rounded to a whole number)
+- **Pickers** — a capability offering a list of options to choose from (up to six, for example Off / Auto / On on an Advanced Virtual Device) appears as a row of buttons on the tile, with the current option highlighted. Tapping one sets it straight away. Up to three such lists per device are shown as buttons; further ones appear as text, as before
 
 ### Flow Buttons & Flow Action Cards
 - **One-tap flow triggers** — select any manually-triggerable Homey flow in the settings to show it as a button on the dashboard
