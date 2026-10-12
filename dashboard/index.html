@@ -245,6 +245,17 @@
     </div>
   </div>
 
+  <!-- Auswahl-Fenster: setzbare Auswahllisten eines Geraets -->
+  <div id="picker-modal" class="lock-modal" style="display:none" onclick="if(event.target===this)closePickerModal()">
+    <div class="lock-modal-inner picker-modal-inner">
+      <div class="lock-modal-header">
+        <span id="picker-modal-name" class="lock-modal-name"></span>
+        <button class="lock-modal-close" onclick="closePickerModal()">&#10005;</button>
+      </div>
+      <div id="picker-modal-body"></div>
+    </div>
+  </div>
+
   <!-- Thermostat-Modal -->
   <div id="thermostat-modal" class="thermostat-modal" style="display:none" onclick="if(event.target===this)closeThermostatModal()">
     <div class="thermostat-modal-inner">
@@ -270,6 +281,7 @@
           <button class="thermostat-adj-btn thermostat-adj-minus" onclick="thermostatAdjust(-0.5)">－</button>
         </div>
         <div class="thermostat-modes" id="thermostat-modes"></div>
+        <div id="thermostat-pickers" style="display:none"></div>
       </div>
     </div>
   </div>

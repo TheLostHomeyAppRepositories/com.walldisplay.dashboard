@@ -2243,6 +2243,12 @@
       capIds.indexOf(CAP.LIGHT_HUE) !== -1 ||
       capIds.indexOf(CAP.LIGHT_TEMP) !== -1);
     var isPriceDevice = capIds.indexOf('current_quarter_price') !== -1;
+    // Geraete mit Auswahllisten bekommen ein eigenes Fenster — genau wie eine
+    // Lampe mit Farbe. Geraete, die schon ein Fenster haben, behalten ihres;
+    // beim Thermostat haengen die Listen unten dran.
+    var oeffnetAuswahl = _findPicklists(capIds, caps).length > 0
+      && !isSpeaker && !isThermostat && !isLock && !isPriceDevice
+      && !isCamera && !isRichLight && !hasAlarm;
     var _buttonCapId = null;
     for (var _bi = 0; _bi < capIds.length; _bi++) {
       if (capIds[_bi] === 'button' || capIds[_bi].indexOf('devicecapabilities_button.button') === 0) {
@@ -2321,7 +2327,20 @@
       }(d.id));
     }
 
-    if (!isSpeaker && !isThermostat && !isLock && !isPriceDevice && !isCamera && !isRichLight && (hasAlarm || hasOnOff)) {
+    // Auswahlliste → eigenes Fenster. Der Schalter in der Ecke und die Regler
+    // auf der Kachel bleiben direkt bedienbar.
+    if (oeffnetAuswahl) {
+      card.classList.add('clickable');
+      (function (deviceId) {
+        card.addEventListener('click', function (e) {
+          if (e.target.classList.contains('device-toggle')) return;
+          if (e.target.tagName === 'INPUT') return;
+          openPickerModal(deviceId);
+        });
+      }(d.id));
+    }
+
+    if (!isSpeaker && !isThermostat && !isLock && !isPriceDevice && !isCamera && !isRichLight && !oeffnetAuswahl && (hasAlarm || hasOnOff)) {
       card.classList.add('clickable');
       (function (deviceId) {
         card.addEventListener('click', function (e) {
@@ -2604,26 +2623,32 @@
   // Moeglichkeit sie zu aendern.
   var _ENUM_BELEGT = ['thermostat_mode', 'homealarm_state', 'windowcoverings_state',
                       'speaker_repeat', 'light_mode'];
-  // Hoechstens drei Reihen: ein Geraet mit zehn Auswahllisten wuerde die
-  // Kachel auf Bildschirmhoehe treiben, und im Gitter zieht eine hohe Kachel
-  // ihre ganze Zeile mit. Was darueber liegt, erscheint wie bisher als Text.
-  // Mehr als sechs Moeglichkeiten ebenso: eine Reihe aus zwanzig Knoepfen ist
-  // keine Bedienung mehr.
-  var _ENUM_MAX_REIHEN = 3;
-  var _ENUM_MAX_WERTE  = 6;
+  // Die Listen stehen im Geraetefenster, nicht auf der Kachel. Dort ist Platz,
+  // also gibt es keine Obergrenze fuer Anzahl und Umfang — eine Klimaanlage
+  // bringt leicht fuenf davon mit. Eine Liste mit nur einer Moeglichkeit faellt
+  // weg: ein einzelner Knopf waehlt nichts aus (ein Maehroboter meldet so seine
+  // einzige Karte).
   function _findPicklists(capIds, caps) {
     var treffer = [];
-    for (var i = 0; i < capIds.length && treffer.length < _ENUM_MAX_REIHEN; i++) {
+    for (var i = 0; i < capIds.length; i++) {
       var id = capIds[i];
       var basis = id.split('.')[0];
       if (_ENUM_BELEGT.indexOf(basis) !== -1) continue;
       var c = caps[id];
       if (!c || c.setable === false) continue;
-      if (!c.values || !c.values.length || c.values.length > _ENUM_MAX_WERTE) continue;
+      if (!c.values || c.values.length < 2) continue;
       if (c.type && c.type !== 'enum') continue;
       treffer.push({ id: id, cap: c });
     }
     return treffer;
+  }
+
+  // Beschriftung einer Faehigkeit. Der Server loest den Titel in der Regel
+  // schon zu einer Zeichenkette auf; mehrsprachige Titel kommen aber vor.
+  function _capTitle(cap, id) {
+    var t = cap && cap.title;
+    if (t && typeof t === 'object') return t[lang] || t.en || id;
+    return t || id;
   }
 
   function _formatCapValue(fcap) {
@@ -2847,12 +2872,6 @@
       }
     }
 
-    // Auswahlliste: erst suchen, aufgebaut wird sie nach den Textwerten.
-    // Sie zaehlt absichtlich nicht als Wert, damit der Rueckfall darunter
-    // weiterhin laeuft — sonst verschwinden auf so einer Kachel alle Zahlen.
-    var _picks = _findPicklists(capIds, caps);
-    var _pickIds = _picks.map(function (p) { return p.id; });
-
     // Fallback für Custom-Capabilities (z.B. current_quarter_price, solar_forecast_power)
     var _fbExcludeClasses = ['speaker', 'mediaplayer', 'homealarm', 'lock', 'light', 'socket'];
     if (added === 0 && _fbExcludeClasses.indexOf(d.class) === -1) {
@@ -2869,7 +2888,6 @@
       for (var fi = 0; fi < fbCapIds.length && fbCount < 2; fi++) {
         var fid = fbCapIds[fi];
         if (fbSkip.indexOf(fid) !== -1) continue;
-        if (_pickIds.indexOf(fid) !== -1) continue;
         if (fid.indexOf('_json') !== -1) continue;
         if (fid.indexOf('_hour_') !== -1 || fid.indexOf('_tomorrow_') !== -1) continue;
         if (fid.indexOf('debug') !== -1 || fid.indexOf('timeline') !== -1) continue;
@@ -2885,32 +2903,6 @@
         fbCount++;
       }
     }
-
-    // Auswahlliste als Knopfreihe, unterhalb der Werte. Die Optik ist die der
-    // Storen-Tasten, damit nichts Neues gelernt werden muss. Eigene
-    // Reihen-Klasse: _wcHighlight greift auf die erste '.wc-btn-row' einer
-    // Karte zu und wuerde die Markierung hier sonst wieder abraeumen.
-    _picks.forEach(function (pick) {
-      var pickRow = createElement('div', 'enum-btn-row');
-      pickRow.setAttribute('data-enum-cap', pick.id);
-      pick.cap.values.forEach(function (wert) {
-        var b = createElement('button', 'wc-btn enum-btn');
-        b.textContent = _enumLabel(wert);
-        b.setAttribute('data-enum', wert.id);
-        if (wert.id === pick.cap.value) b.classList.add('active');
-        (function (deviceId, capId, optionId) {
-          b.addEventListener('click', function (e) {
-            e.stopPropagation();
-            // setCapability schreibt den Wert sofort mit und ruft updateCard —
-            // dort sitzt die Markierung, hier wird nichts von Hand gesetzt.
-            setCapability(deviceId, capId, optionId);
-          });
-        }(d.id, pick.id, wert.id));
-        pickRow.appendChild(b);
-      });
-      container.appendChild(pickRow);
-      added++;
-    });
 
     return added > 0 ? container : null;
   }
@@ -3046,6 +3038,7 @@
     if (_alarmModalId === deviceId) _updateAlarmModal();
     if (_lockModalId === deviceId) _updateLockModal();
     if (_priceModalId === deviceId) _updatePriceModal();
+    if (_pickerModalId === deviceId) _updatePickerModal();
 
     // Alarme (dot-Index muss mit buildValueElements übereinstimmen)
     var dots = card.querySelectorAll('.alarm-dot');
@@ -3077,14 +3070,6 @@
 
     // Auswahlliste: Markierung dem gemeldeten Wert nachziehen. Greift auch
     // dann, wenn der Wert aus einem Flow oder von der Homey-App kommt.
-    Array.prototype.forEach.call(card.querySelectorAll('.enum-btn-row'), function (reihe) {
-      var eCap = caps[reihe.getAttribute('data-enum-cap')];
-      var eVal = eCap ? eCap.value : null;
-      Array.prototype.forEach.call(reihe.querySelectorAll('.enum-btn'), function (b) {
-        b.classList.toggle('active', b.getAttribute('data-enum') === eVal);
-      });
-    });
-
     // Zum Schluss, wenn alle Werte frisch sind: doppelte Statuszeile entfernen.
     // Frueher im Ablauf wuerde gegen veraltete Werte verglichen.
     _dedupeStatus(card, statusEl);
@@ -4456,6 +4441,7 @@
 
   // ── Lock-Modal ────────────────────────────────────
   var _lockModalId = null;
+  var _pickerModalId = null;
 
   // Gibt die beste Enum-Capability für Lock-Aktionen zurück
   // (lock_mode standard oder beliebige Nuki-eigene Enum-Cap)
@@ -4635,6 +4621,69 @@
 
   window.openLockModal  = openLockModal;
   window.closeLockModal = closeLockModal;
+
+  // ── Auswahl-Fenster ─────────────────────────────────
+  // Zeigt jede setzbare Auswahlliste eines Geraets als Knopfreihe mit
+  // Beschriftung. Wird auch vom Thermostat-Fenster benutzt, das seine
+  // Zusatzlisten unterhalb der Modus-Knoepfe fuehrt.
+  function _buildPickerGroups(container, d) {
+    if (!container || !d) return 0;
+    var caps  = d.capabilitiesObj || {};
+    var listen = _findPicklists(d.capabilities || [], caps);
+    container.innerHTML = '';
+    container.style.display = listen.length ? 'block' : 'none';
+    listen.forEach(function (pick) {
+      var gruppe = createElement('div', 'picker-group');
+      var titel  = createElement('div', 'picker-group-title');
+      titel.textContent = _capTitle(pick.cap, pick.id);
+      gruppe.appendChild(titel);
+      var reihe = createElement('div', 'enum-btn-row');
+      reihe.setAttribute('data-enum-cap', pick.id);
+      pick.cap.values.forEach(function (wert) {
+        var b = createElement('button', 'wc-btn enum-btn');
+        b.textContent = _enumLabel(wert);
+        b.setAttribute('data-enum', wert.id);
+        if (wert.id === pick.cap.value) b.classList.add('active');
+        (function (deviceId, capId, optionId) {
+          b.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // setCapability schreibt den Wert mit und ruft updateCard; von dort
+            // kommt der Neuaufbau mit der frischen Markierung zurueck.
+            setCapability(deviceId, capId, optionId);
+          });
+        }(d.id, pick.id, wert.id));
+        reihe.appendChild(b);
+      });
+      gruppe.appendChild(reihe);
+      container.appendChild(gruppe);
+    });
+    return listen.length;
+  }
+
+  function openPickerModal(deviceId) {
+    var d = devices[deviceId];
+    if (!d) return;
+    _pickerModalId = deviceId;
+    document.getElementById('picker-modal-name').textContent = d.name;
+    document.getElementById('picker-modal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _updatePickerModal();
+  }
+
+  function closePickerModal() {
+    document.getElementById('picker-modal').style.display = 'none';
+    document.body.style.overflow = '';
+    _pickerModalId = null;
+  }
+
+  function _updatePickerModal() {
+    if (!_pickerModalId) return;
+    _buildPickerGroups(document.getElementById('picker-modal-body'),
+                       devices[_pickerModalId]);
+  }
+
+  window.openPickerModal  = openPickerModal;
+  window.closePickerModal = closePickerModal;
 
   // ── Thermostat-Modal ──────────────────────────────
   var _thermostatModalId = null;
@@ -4912,6 +4961,10 @@
     } else {
       modesEl.style.display = 'none';
     }
+
+    // Weitere Auswahllisten (Luefterstufe, Schwenkrichtung, Leisemodus …)
+    // unterhalb der Modus-Knoepfe. Eine Klimaanlage bringt davon mehrere mit.
+    _buildPickerGroups(document.getElementById('thermostat-pickers'), d);
   }
 
   function thermostatAdjust(delta) {

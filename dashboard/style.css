@@ -483,21 +483,6 @@ body.fit-tiles .device-card {
   min-height: 0;
 }
 
-/* Bei fester Hoehe darf der Inhalt den Namen nicht nach unten aus der Kachel
-   schieben — eine Kachel ohne Namen ist unbrauchbar (siehe .fit-compact
-   weiter unten, das denselben Zweck eine Stufe spaeter verfolgt). Flex-Kinder
-   schrumpfen von sich aus nicht unter ihren Inhalt; 'min-height: 0' hebt das
-   fuer den Werteblock auf, 'flex-shrink: 0' haelt Name und Status fest.
-   Gekuerzt wird damit der Werteblock, und zwar von unten. */
-body.fit-tiles .device-values {
-  min-height: 0;
-  overflow: hidden;
-}
-body.fit-tiles .device-name,
-body.fit-tiles .device-status {
-  flex-shrink: 0;
-}
-
 /* Aufteilung 2 x 2: die Spaltenzahl wird hier fest vorgegeben statt aus der
    Kachelbreite abgeleitet — genau das ist der Zweck dieser Einstellung. */
 body.fit-2x2 .device-grid {
@@ -653,29 +638,59 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
   .wc-btn.active:hover { background: var(--accent); color: #fff; }
 }
 
-/* ── Auswahlliste (setzbare Aufzaehlung, z.B. Ein/Aus/Auto) ── */
-/* Gleiche Optik wie die Fahrtasten, aber mit Wortbeschriftungen: deshalb
-   umbrechend statt gestaucht — bei 130 px Kachelbreite bleiben drei
-   Moeglichkeiten sonst unlesbar. Eigene Reihen-Klasse, damit _wcHighlight
-   diese Reihe nicht erwischt. */
+/* ── Auswahllisten im Geraetefenster ── */
+/* Optik der Fahrtasten, aber mit Wortbeschriftungen: deshalb umbrechend statt
+   gestaucht. Auf der Kachel stehen diese Reihen bewusst nicht — eine
+   Klimaanlage bringt fuenf Listen mit, und die passen nirgends hin. */
+.picker-group + .picker-group {
+  margin-top: 14px;
+}
+
+.picker-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* Raster statt Flex: bei einer langen Liste (ein Timer bringt 25 Stufen mit)
+   behaelt der letzte Knopf seine Spaltenbreite, statt ueber die ganze Zeile
+   gezogen zu werden. 'auto-fit' laesst leere Spalten einfallen, darum teilen
+   sich zwei Moeglichkeiten weiterhin die volle Breite. */
 .enum-btn-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
   width: 100%;
 }
 
+/* Die Beschriftungen bricht die Zeile um, statt sie zu kuerzen: eine
+   Klimaanlage meldet Namen wie "Feste obere Mitte", und mit
+   Auslassungspunkten hiessen dann vier Knoepfe gleich "Feste ...".
+   Im Raster teilen sich alle Knoepfe einer Zeile die groesste Hoehe. */
 .enum-btn {
-  flex: 1 1 auto;
-  min-width: 44px;
+  min-width: 0;
   max-width: 100%;
-  padding: 0 6px;
+  padding: 6px 8px;
   font-size: 13px;
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
+  /* Notnagel fuer lange Einzelwoerter ohne Trennstelle ("Staubsaugen"):
+     lieber im Wort umbrechen als die Haelfte abschneiden. */
+  overflow-wrap: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* Viele Listen passen nicht auf einen Bildschirm — das Fenster rollt. */
+.picker-modal-inner {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+#thermostat-pickers {
+  margin-top: 16px;
+  text-align: left;
 }
 
 .device-icon {
@@ -2500,6 +2515,11 @@ body.tile-colors-strong .flow-tile:not(.dashboard-shortcut-tile) {
   width: 100%;
   max-width: 380px;
   box-shadow: 0 8px 48px rgba(0,0,0,0.35);
+  /* Mit den Auswahllisten unter den Modus-Knoepfen kann das Fenster hoeher
+     werden als der Bildschirm — eine Klimaanlage bringt fuenf Listen mit.
+     Gemessen: 978 px auf 800 px Schirm, die unteren waren unerreichbar. */
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .thermostat-modal-header {
