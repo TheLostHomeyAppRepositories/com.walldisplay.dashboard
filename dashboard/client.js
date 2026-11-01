@@ -1292,9 +1292,10 @@
         }
         // Hintergrund-Stil
         var bgStyle = cfg.bgStyle || 'flat';
-        document.body.classList.remove('bg-gradient', 'bg-glass');
+        document.body.classList.remove('bg-gradient', 'bg-glass', 'bg-black');
         if (bgStyle === 'gradient') document.body.classList.add('bg-gradient');
         if (bgStyle === 'glass')    document.body.classList.add('bg-glass');
+        if (bgStyle === 'black')    document.body.classList.add('bg-black');
         // Animations-Modus
         var animMode = cfg.animMode || 'default';
         document.body.classList.remove('anim-off', 'anim-lively');
@@ -1425,6 +1426,59 @@
   }
 
   var _drag = null;
+
+  // ── Riegel gegen versehentliches Schalten beim Blaettern ────
+  // Bei einem Geraet mit Ein/Aus ist die ganze Kachel klickbar, also rund
+  // 200 x 100 px Trefferflaeche. Zwei Faelle sorgen fuer ungewollte Schaltungen:
+  // der Finger wandert beim Wischen ueber eine Kachel, und das Antippen, um
+  // einen nachlaufenden Bildlauf anzuhalten. Im zweiten bewegt sich der Finger
+  // gar nicht — eine reine Bewegungspruefung wuerde ihn also verfehlen.
+  // Der Riegel sitzt bewusst an einer einzigen Stelle in der Erfassungsphase,
+  // statt in jedem der vielen Klick-Behandler auf den Kacheln.
+  var _TAP_WEG_PX     = 10;   // dieselbe Schwelle wie beim Ziehen
+  var _TAP_SPERRE_MS  = 250;  // Schonfrist nach dem letzten Bildlauf
+  var _letzterLauf    = 0;
+  var _tippStart      = null;
+  var _tippWanderte   = false;
+
+  // Bildlauf meldet nicht nach oben, wird aber erfasst — darum capture.
+  document.addEventListener('scroll', function () {
+    _letzterLauf = Date.now();
+  }, { capture: true, passive: true });
+
+  function _tippMerke(e) {
+    var pt = e.touches ? e.touches[0] : e;
+    _tippStart = { x: pt.clientX, y: pt.clientY };
+    _tippWanderte = false;
+  }
+  function _tippPruefe(e) {
+    if (!_tippStart || _tippWanderte) return;
+    var pt = e.touches ? e.touches[0] : e;
+    if (Math.abs(pt.clientX - _tippStart.x) +
+        Math.abs(pt.clientY - _tippStart.y) > _TAP_WEG_PX) {
+      _tippWanderte = true;
+    }
+  }
+  // Beruehrung und Maus getrennt, wie in makeDraggable: nicht jedes Geraet,
+  // das dieses Dashboard anzeigt, kennt Pointer Events.
+  document.addEventListener('touchstart', _tippMerke,  { capture: true, passive: true });
+  document.addEventListener('touchmove',  _tippPruefe, { capture: true, passive: true });
+  document.addEventListener('mousedown',  _tippMerke,  true);
+  document.addEventListener('mousemove',  _tippPruefe, true);
+
+  document.addEventListener('click', function (e) {
+    // Nur Kacheln schuetzen. In Fenstern, in der Kopfleiste und auf der
+    // Einstellungsseite muss ein Tipp direkt nach dem Blaettern ankommen.
+    var kachel = (e.target && e.target.closest)
+      ? e.target.closest('.device-card, .flow-tile') : null;
+    if (!kachel) return;
+    var kurzNachLauf = (Date.now() - _letzterLauf) < _TAP_SPERRE_MS;
+    if (!_tippWanderte && !kurzNachLauf) return;
+    // Nur die Weiterleitung stoppen, kein preventDefault: der Regler hat
+    // seinen Wert laengst ueber 'input' gemeldet, und ein Flow-Knopf ist ein
+    // echtes <button>, dem man nichts wegnehmen muss.
+    e.stopPropagation();
+  }, true);
 
   function _initDrag(grid, selector, onSave) {
     Array.from(grid.querySelectorAll(selector)).forEach(function (el) {

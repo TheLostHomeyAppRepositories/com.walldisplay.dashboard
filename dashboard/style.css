@@ -118,6 +118,20 @@ body[data-theme="dark"].bg-gradient {
   background: linear-gradient(145deg, #1a1a2e 0%, #1c1c1e 50%, #0d1a14 100%);
 }
 
+/* OLED-Schwarz. Nur im Dunkelmodus wirksam: auf einem hellen Dashboard waere
+   ein schwarzer Grund keine Einstellung, sondern ein Fehler. Die Kacheln
+   bleiben auf ihrem --surface stehen, sonst verschwindet das Raster. */
+[data-theme="dark"] body.bg-black,
+body[data-theme="dark"].bg-black {
+  background: #000;
+}
+/* Die Kopfleiste hat im Dunkelmodus ihren eigenen Grund — ohne das hier
+   stuende ein grauer Balken ueber schwarzer Flaeche. */
+[data-theme="dark"] body.bg-black .header,
+body[data-theme="dark"].bg-black .header {
+  background: rgba(0, 0, 0, 0.92);
+}
+
 /* Glass — light: gradient bg + frosted tiles */
 body.bg-glass {
   background: linear-gradient(145deg, #dce8ff 0%, #eef4ff 40%, #e8f0ff 100%);
